@@ -154,38 +154,39 @@ async function fetchFavorites() {
 function categoryFor(story) {
   if (!story || !allCategories.length) return null;
 
+  // 1. Si un jour tu utilises une colonne category_id numérique
   if (story.category_id != null) {
     const byId = allCategories.find((c) => String(c.id) === String(story.category_id));
     if (byId) return byId;
   }
 
-  const raw = story.category;
-  if (raw === null || raw === undefined || raw === '') return null;
+  // 2. On cherche le texte ("Thriller") en gérant les majuscules possibles
+  const raw = story.category || story.Category || story.categories || story.genre;
 
+  // Si on ne trouve vraiment rien
+  if (raw === null || raw === undefined || raw === '') {
+    console.warn('[MIJO Story] Colonne introuvable ou case vide pour l\'histoire. Voici les colonnes que Supabase voit :', Object.keys(story));
+    return null;
+  }
+
+  // 3. Si c'est un chiffre au format texte
   if (!isNaN(raw)) {
     const byNumericId = allCategories.find((c) => String(c.id) === String(raw));
     if (byNumericId) return byNumericId;
   }
 
+  // 4. On compare le mot avec ta table de catégories (en ignorant les majuscules et les espaces)
   const normalized = String(raw).trim().toLowerCase();
   const byName = allCategories.find((c) =>
     [c.name_en, c.name_fr, c.name_es].some((n) => (n || '').trim().toLowerCase() === normalized)
   );
 
   if (!byName) {
-    console.warn(
-      '[MIJO Story] Catégorie introuvable pour l\'histoire',
-      story.id,
-      '— valeur reçue :',
-      JSON.stringify(raw),
-      '— catégories disponibles :',
-      allCategories.map((c) => ({ id: c.id, name_fr: c.name_fr, name_en: c.name_en }))
-    );
+    console.warn(`[MIJO Story] Le mot "${raw}" de ton histoire ne correspond à aucune catégorie dans ta table 'categories'.`);
   }
 
   return byName || null;
 }
-
 function renderCategoryFilters() {
   const nav = document.getElementById('category-filters');
   if (!nav) return;
