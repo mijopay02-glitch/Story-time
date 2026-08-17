@@ -4,8 +4,8 @@
  * (Project Settings > API dans votre dashboard Supabase).
  */
 const SUPABASE_CONFIG = {
-  url: 'https://VOTRE-PROJET.supabase.co',   // <- SUPABASE_URL
-  anonKey: 'VOTRE_CLE_ANON_PUBLIQUE',        // <- SUPABASE_ANON_KEY
+  url: 'https://xfpmlemgmakdufxmomwq.supabase.co',   // <- SUPABASE_URL
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmcG1sZW1nbWFrZHVmeG1vbXdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Mjk1NDgsImV4cCI6MjEwMjQwNTU0OH0.QM4VYFOmrqPssPBgBcq5ruwu8ZwuPj0mrdqvR8ibJ-0',        // <- SUPABASE_ANON_KEY
 };
 
 const isConfigPlaceholder =
