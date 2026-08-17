@@ -108,6 +108,7 @@ const APP_LANG = 'fr'; // langue d'affichage par défaut (fr / en / es)
 let allCategories = [];
 let allStories = [];
 let activeCategory = 'all';
+let favoriteStoryIds = new Set();
 
 function localizedField(obj, field) {
   return (
@@ -132,6 +133,19 @@ async function fetchStories() {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
+}
+
+async function fetchFavorites() {
+  if (!supabaseClient || !currentProfile) return [];
+  const { data, error } = await supabaseClient
+    .from('favorites')
+    .select('story_id')
+    .eq('user_id', currentProfile.id);
+  if (error) {
+    console.warn('[MIJO Story] Impossible de charger les favoris :', error);
+    return [];
+  }
+  return (data || []).map((row) => String(row.story_id));
 }
 
 // Les histoires peuvent référencer leur catégorie de plusieurs façons selon
@@ -205,29 +219,46 @@ function renderCategoryFilters() {
   });
 }
 
+function heartIcon(filled) {
+  return filled
+    ? `<svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-rose-400" fill="currentColor"><path d="M12 21s-6.7-4.35-9.33-8.2C1.02 10.28 1.9 6.7 5.1 5.6c2-.7 3.9.1 4.9 1.7 1-1.6 2.9-2.4 4.9-1.7 3.2 1.1 4.08 4.68 2.43 7.2C18.7 16.65 12 21 12 21z"/></svg>`
+    : `<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.7-4.35-9.33-8.2C1.02 10.28 1.9 6.7 5.1 5.6c2-.7 3.9.1 4.9 1.7 1-1.6 2.9-2.4 4.9-1.7 3.2 1.1 4.08 4.68 2.43 7.2C18.7 16.65 12 21 12 21z"/></svg>`;
+}
+
 function storyCardTemplate(story) {
   const title = localizedField(story, 'title');
+  const isFav = favoriteStoryIds.has(String(story.id));
   return `
-    <button
-      data-story-id="${story.id}"
-      class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[9/16] text-left transition-transform active:scale-[0.97]"
-    >
-      <img
-        src="${story.thumbnail_url}"
-        alt="${title}"
-        class="absolute inset-0 w-full h-full object-cover"
-        loading="lazy"
-      />
-      <div class="absolute inset-0 bg-gradient-to-t from-navy via-navy/10 to-transparent"></div>
-      ${
-        story.is_premium
-          ? `<span class="absolute top-2 right-2 bg-gold text-navy text-[10px] font-display font-bold px-2 py-0.5 rounded-full shadow">Premium</span>`
-          : ''
-      }
-      <div class="absolute bottom-0 left-0 right-0 p-2.5">
-        <p class="font-display text-sm font-semibold leading-snug text-[color:var(--text-primary)] line-clamp-2">${title}</p>
-      </div>
-    </button>`;
+    <div class="relative">
+      <button
+        data-story-id="${story.id}"
+        class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[9/16] text-left transition-transform active:scale-[0.97] w-full"
+      >
+        <img
+          src="${story.thumbnail_url}"
+          alt="${title}"
+          class="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-navy via-navy/10 to-transparent"></div>
+        ${
+          story.is_premium
+            ? `<span class="absolute top-2 right-2 bg-gold text-navy text-[10px] font-display font-bold px-2 py-0.5 rounded-full shadow">Premium</span>`
+            : ''
+        }
+        <div class="absolute bottom-0 left-0 right-0 p-2.5">
+          <p class="font-display text-sm font-semibold leading-snug text-[color:var(--text-primary)] line-clamp-2">${title}</p>
+        </div>
+      </button>
+
+      <button
+        class="favorite-btn absolute top-2 left-2 z-10 w-7 h-7 rounded-full bg-navy/70 backdrop-blur border border-navy-line flex items-center justify-center text-[color:var(--text-primary)] transition-colors ${
+          isFav ? 'border-rose-400/60' : ''
+        }"
+        data-story-id="${story.id}"
+        aria-label="Ajouter aux favoris"
+      >${heartIcon(isFav)}</button>
+    </div>`;
 }
 
 function renderStoriesGrid() {
@@ -286,9 +317,14 @@ async function loadHomeData() {
   if (msg) msg.textContent = 'Vérifiez votre connexion internet et réessayez.';
 
   try {
-    const [categories, stories] = await Promise.all([fetchCategories(), fetchStories()]);
+    const [categories, stories, favorites] = await Promise.all([
+      fetchCategories(),
+      fetchStories(),
+      fetchFavorites(),
+    ]);
     allCategories = categories;
     allStories = stories;
+    favoriteStoryIds = new Set(favorites);
     renderCategoryFilters();
     renderStoriesGrid();
     setHomeState('ready');
@@ -307,6 +343,11 @@ function initHome() {
   const grid = document.getElementById('stories-grid');
   if (grid) {
     grid.addEventListener('click', (e) => {
+      const favBtn = e.target.closest('.favorite-btn');
+      if (favBtn) {
+        toggleFavorite(favBtn.dataset.storyId);
+        return;
+      }
       const card = e.target.closest('.story-card');
       if (!card) return;
       const story = allStories.find((s) => String(s.id) === card.dataset.storyId);
@@ -315,6 +356,59 @@ function initHome() {
   }
 
   loadHomeData();
+}
+
+/* ---------- Favoris ---------- */
+
+function syncFavoriteButtons(storyId) {
+  const id = String(storyId);
+  const isFav = favoriteStoryIds.has(id);
+
+  document.querySelectorAll(`.favorite-btn[data-story-id="${id}"]`).forEach((btn) => {
+    btn.innerHTML = heartIcon(isFav);
+    btn.classList.toggle('border-rose-400/60', isFav);
+  });
+
+  const readerBtn = document.getElementById('reader-favorite-btn');
+  if (readerBtn && readerBtn.dataset.storyId === id) {
+    readerBtn.innerHTML = heartIcon(isFav);
+    readerBtn.classList.toggle('border-rose-400/60', isFav);
+  }
+}
+
+async function toggleFavorite(storyId) {
+  if (!currentProfile) return;
+  const id = String(storyId);
+  const wasFav = favoriteStoryIds.has(id);
+
+  // Mise à jour optimiste de l'UI, avant même la réponse du serveur.
+  if (wasFav) favoriteStoryIds.delete(id);
+  else favoriteStoryIds.add(id);
+  syncFavoriteButtons(id);
+
+  if (!supabaseClient) return; // mode démo : reste local tant que Supabase n'est pas configuré
+
+  try {
+    if (wasFav) {
+      const { error } = await supabaseClient
+        .from('favorites')
+        .delete()
+        .eq('user_id', currentProfile.id)
+        .eq('story_id', id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabaseClient
+        .from('favorites')
+        .insert({ user_id: currentProfile.id, story_id: id });
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.error('[MIJO Story] Erreur lors de la mise à jour des favoris :', err);
+    // Retour en arrière si l'écriture serveur échoue
+    if (wasFav) favoriteStoryIds.add(id);
+    else favoriteStoryIds.delete(id);
+    syncFavoriteButtons(id);
+  }
 }
 
 /* ---------- Lecteur immersif ---------- */
@@ -437,6 +531,14 @@ function openReader(story) {
   const categoryEl = document.getElementById('reader-category');
   if (categoryEl) categoryEl.textContent = category ? localizedField(category, 'name') : '';
 
+  const favBtn = document.getElementById('reader-favorite-btn');
+  if (favBtn) {
+    favBtn.dataset.storyId = String(story.id);
+    const isFav = favoriteStoryIds.has(String(story.id));
+    favBtn.innerHTML = heartIcon(isFav);
+    favBtn.classList.toggle('border-rose-400/60', isFav);
+  }
+
   renderParagraphs(document.getElementById('reader-text-1'), localizedField(story, 'text_1'));
   renderParagraphs(document.getElementById('reader-text-2'), localizedField(story, 'text_2'));
 
@@ -463,18 +565,182 @@ function closeReader() {
 
 function initReader() {
   const backBtn = document.getElementById('reader-back-btn');
-  if (backBtn) backBtn.addEventListener('click', closeReader);
+  if (backBtn) backBtn.addEventListener('click', handleReaderBack);
+
+  const favBtn = document.getElementById('reader-favorite-btn');
+  if (favBtn) {
+    favBtn.addEventListener('click', () => {
+      if (favBtn.dataset.storyId) toggleFavorite(favBtn.dataset.storyId);
+    });
+  }
 
   const ambientBtn = document.getElementById('ambient-toggle-btn');
   if (ambientBtn) ambientBtn.addEventListener('click', toggleAmbient);
 
   const unlockBtn = document.getElementById('unlock-btn');
-  if (unlockBtn) {
-    unlockBtn.addEventListener('click', () => {
-      // Simule l'upgrade premium : dans un prochain bloc, ceci déclenchera
-      // le vrai flux de paiement/abonnement.
-      localStorage.setItem(PREMIUM_STORAGE_KEY, 'true');
-      if (currentReaderStory) updatePremiumLock(currentReaderStory);
+  if (unlockBtn) unlockBtn.addEventListener('click', openUpgradeModal);
+
+  initUpgradeModal();
+  initAdInterstitial();
+}
+
+/* ---------- Publicité interstitielle (déclenchée par "Retour") ---------- */
+
+function showInterstitialAd(onDismiss) {
+  const overlay = document.getElementById('ad-interstitial');
+  const closeBtn = document.getElementById('ad-close-btn');
+  const countdownEl = document.getElementById('ad-countdown');
+
+  if (!overlay || !closeBtn || !countdownEl) {
+    onDismiss();
+    return;
+  }
+
+  let remaining = 3 + Math.floor(Math.random() * 3); // 3 à 5 secondes
+  closeBtn.disabled = true;
+  countdownEl.textContent = `Fermeture dans ${remaining}s`;
+  overlay.classList.remove('hidden');
+  overlay.classList.add('flex');
+
+  const timer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      closeBtn.disabled = false;
+      countdownEl.textContent = 'Vous pouvez fermer';
+    } else {
+      countdownEl.textContent = `Fermeture dans ${remaining}s`;
+    }
+  }, 1000);
+
+  function handleClose() {
+    clearInterval(timer);
+    overlay.classList.add('hidden');
+    overlay.classList.remove('flex');
+    closeBtn.removeEventListener('click', handleClose);
+    onDismiss();
+  }
+
+  closeBtn.addEventListener('click', handleClose);
+}
+
+function initAdInterstitial() {
+  // Rien à initialiser ici pour l'instant : showInterstitialAd() attache et
+  // détache elle-même son écouteur à chaque affichage.
+}
+
+function handleReaderBack() {
+  showInterstitialAd(() => closeReader());
+}
+
+/* ---------- Pop-up Upgrade Premium + paiement Google (simulation) ---------- */
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function openUpgradeModal() {
+  const modal = document.getElementById('upgrade-modal');
+  const emailInput = document.getElementById('upgrade-email-input');
+  const errorEl = document.getElementById('upgrade-error');
+  if (!modal) return;
+
+  if (emailInput) emailInput.value = currentProfile.email || '';
+  if (errorEl) errorEl.classList.add('hidden');
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeUpgradeModal() {
+  const modal = document.getElementById('upgrade-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+// Simule le déclenchement du paiement Google (Google Pay côté web, ou Play
+// Billing côté TWA/app native). En production, remplacez ce corps par :
+//  - Web : chargez https://pay.google.com/gp/p/js/pay.js, créez un
+//    google.payments.api.PaymentsClient, puis appelez
+//    client.loadPaymentData(paymentRequest).
+//  - App Android (TWA/native) : appelez la Google Play Billing Library
+//    (BillingClient.launchBillingFlow) via le pont JS<->Android.
+async function triggerGooglePayment() {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({ success: true, transactionId: `SIMU-${Date.now()}` });
+    }, 1500);
+  });
+}
+
+async function activatePremiumAccount(email) {
+  localStorage.setItem(PREMIUM_STORAGE_KEY, 'true');
+  currentProfile.email = email;
+  saveProfile(currentProfile);
+
+  if (currentReaderStory) updatePremiumLock(currentReaderStory);
+
+  if (!supabaseClient) return; // mode démo sans Supabase configuré
+
+  const { error } = await supabaseClient
+    .from('users')
+    .upsert(
+      { id: currentProfile.id, pseudo: currentProfile.pseudo, email, is_premium: true },
+      { onConflict: 'id' }
+    );
+  if (error) console.error('[MIJO Story] Erreur mise à jour utilisateur premium :', error);
+}
+
+async function handleGooglePayClick() {
+  const emailInput = document.getElementById('upgrade-email-input');
+  const errorEl = document.getElementById('upgrade-error');
+  const btn = document.getElementById('google-pay-btn');
+  const label = document.getElementById('google-pay-label');
+  if (!emailInput || !errorEl || !btn || !label) return;
+
+  const email = emailInput.value.trim();
+  if (!isValidEmail(email)) {
+    errorEl.textContent = 'Veuillez saisir une adresse email valide.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  errorEl.classList.add('hidden');
+
+  btn.disabled = true;
+  label.textContent = 'Traitement du paiement…';
+
+  try {
+    const payment = await triggerGooglePayment();
+    if (!payment.success) throw new Error('Paiement refusé');
+
+    await activatePremiumAccount(email);
+
+    label.textContent = 'Paiement réussi';
+    setTimeout(() => {
+      closeUpgradeModal();
+      btn.disabled = false;
+      label.textContent = 'Payer avec Google Pay';
+    }, 700);
+  } catch (err) {
+    console.error('[MIJO Story] Erreur de paiement :', err);
+    errorEl.textContent = 'Le paiement a échoué. Réessayez.';
+    errorEl.classList.remove('hidden');
+    btn.disabled = false;
+    label.textContent = 'Payer avec Google Pay';
+  }
+}
+
+function initUpgradeModal() {
+  const modal = document.getElementById('upgrade-modal');
+  const closeBtn = document.getElementById('upgrade-close-btn');
+  const payBtn = document.getElementById('google-pay-btn');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeUpgradeModal);
+  if (payBtn) payBtn.addEventListener('click', handleGooglePayClick);
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeUpgradeModal();
     });
   }
 }
