@@ -134,10 +134,21 @@ async function fetchStories() {
   return data || [];
 }
 
-// Les histoires référencent leur catégorie via le nom anglais (colonne
-// `category`), pas via un id — on relie donc les deux tables par ce nom.
+// Les histoires référencent leur catégorie par nom (colonne `category`),
+// pas par id. On compare ce nom aux 3 variantes linguistiques de la table
+// `categories`, insensible à la casse/aux espaces, pour rester robuste
+// quelle que soit la langue utilisée côté `stories`.
 function categoryFor(story) {
-  return allCategories.find((c) => c.name_en === story.category) || null;
+  if (!story) return null;
+  const raw = (story.category || '').trim().toLowerCase();
+  if (!raw) return null;
+  return (
+    allCategories.find((c) =>
+      [c.name_en, c.name_fr, c.name_es].some(
+        (n) => (n || '').trim().toLowerCase() === raw
+      )
+    ) || null
+  );
 }
 
 function renderCategoryFilters() {
@@ -146,7 +157,7 @@ function renderCategoryFilters() {
 
   const pills = [
     { key: 'all', label: 'Toutes' },
-    ...allCategories.map((c) => ({ key: c.name_en, label: localizedField(c, 'name') })),
+    ...allCategories.map((c) => ({ key: String(c.id), label: localizedField(c, 'name') })),
   ];
 
   nav.innerHTML = pills
@@ -206,7 +217,10 @@ function renderStoriesGrid() {
   const filtered =
     activeCategory === 'all'
       ? allStories
-      : allStories.filter((s) => s.category === activeCategory);
+      : allStories.filter((s) => {
+          const cat = categoryFor(s);
+          return cat && String(cat.id) === activeCategory;
+        });
 
   if (filtered.length === 0) {
     grid.classList.add('hidden');
@@ -285,15 +299,6 @@ function initHome() {
 /* ---------- Lecteur immersif ---------- */
 
 const PREMIUM_STORAGE_KEY = 'mijo_story_premium_unlocked';
-
-// Teinte d'accent par catégorie (repli sur le doré de la marque).
-const CATEGORY_ACCENTS = {
-  Psychological: '#9b87f5',
-  Drama: '#ec6f9b',
-  Thriller: '#ef5b52',
-  Adventure: '#34c495',
-  Comedy: '#f2a93b',
-};
 const DEFAULT_ACCENT = '#d4a03d';
 
 const ICON_VOLUME_ON = `<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>`;
@@ -301,8 +306,10 @@ const ICON_VOLUME_OFF = `<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" st
 
 let currentReaderStory = null;
 
-function accentFor(story) {
-  return CATEGORY_ACCENTS[story.category] || DEFAULT_ACCENT;
+// Utilise la couleur réelle de la catégorie (`theme_color`) plutôt qu'une
+// palette codée en dur, avec un repli doré si elle est absente.
+function accentFor(category) {
+  return (category && category.theme_color) || DEFAULT_ACCENT;
 }
 
 function escapeHtml(str) {
@@ -350,9 +357,14 @@ function setupAmbientAudio(category) {
   const src = category && category.ambient_audio_url ? category.ambient_audio_url : '';
 
   if (!src) {
+    console.warn(
+      '[MIJO Story] Aucune URL audio trouvée — catégorie non reconnue ou "ambient_audio_url" vide pour :',
+      category
+    );
     audio.pause();
     audio.removeAttribute('src');
     btn.classList.add('hidden');
+    btn.classList.remove('flex');
     return;
   }
 
@@ -388,7 +400,7 @@ function toggleAmbient() {
 function openReader(story) {
   currentReaderStory = story;
   const category = categoryFor(story);
-  const accent = accentFor(story);
+  const accent = accentFor(category);
   document.documentElement.style.setProperty('--accent', accent);
 
   const title = localizedField(story, 'title');
