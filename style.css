@@ -39,6 +39,23 @@ body {
   display: none !important;
 }
 
+/* Barre de filtres sans scrollbar visible */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Repli si line-clamp Tailwind indisponible */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 input:focus {
   outline: none;
 }
