@@ -101,27 +101,174 @@ function initProfileUI() {
   }
 }
 
-/* ---------- Statut du socle (Tailwind / Supabase / Profil) ---------- */
+/* ---------- Accueil : catégories + histoires ---------- */
 
-function initStatusPanel() {
-  const supabaseStatusEl = document.getElementById('status-supabase');
-  if (!supabaseStatusEl) return;
+const APP_LANG = 'fr'; // langue d'affichage par défaut (fr / en / es)
 
-  if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-    supabaseStatusEl.textContent = 'Connecté';
-    supabaseStatusEl.classList.add('text-emerald-400');
-  } else {
-    supabaseStatusEl.textContent = 'Clés non configurées';
-    supabaseStatusEl.classList.add('text-amber-400');
+let allCategories = [];
+let allStories = [];
+let activeCategory = 'all';
+
+function localizedField(obj, field) {
+  return (
+    obj[`${field}_${APP_LANG}`] || obj[`${field}_fr`] || obj[`${field}_en`] || ''
+  );
+}
+
+async function fetchCategories() {
+  const { data, error } = await supabaseClient
+    .from('categories')
+    .select('*')
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchStories() {
+  const { data, error } = await supabaseClient
+    .from('stories')
+    .select('*')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Les histoires référencent leur catégorie via le nom anglais (colonne
+// `category`), pas via un id — on relie donc les deux tables par ce nom.
+function categoryFor(story) {
+  return allCategories.find((c) => c.name_en === story.category) || null;
+}
+
+function renderCategoryFilters() {
+  const nav = document.getElementById('category-filters');
+  if (!nav) return;
+
+  const pills = [
+    { key: 'all', label: 'Toutes' },
+    ...allCategories.map((c) => ({ key: c.name_en, label: localizedField(c, 'name') })),
+  ];
+
+  nav.innerHTML = pills
+    .map((p) => {
+      const active = p.key === activeCategory;
+      return `<button
+          data-category="${p.key}"
+          class="filter-pill shrink-0 px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            active
+              ? 'bg-gold text-navy border-gold'
+              : 'bg-navy-elevated text-[color:var(--text-muted)] border-navy-line hover:border-gold/50'
+          }"
+        >${p.label}</button>`;
+    })
+    .join('');
+
+  nav.querySelectorAll('.filter-pill').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.category === activeCategory) return;
+      activeCategory = btn.dataset.category;
+      renderCategoryFilters();
+      renderStoriesGrid();
+    });
+  });
+}
+
+function storyCardTemplate(story) {
+  const title = localizedField(story, 'title');
+  return `
+    <button class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[9/16] text-left transition-transform active:scale-[0.97]">
+      <img
+        src="${story.thumbnail_url}"
+        alt="${title}"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+      />
+      <div class="absolute inset-0 bg-gradient-to-t from-navy via-navy/10 to-transparent"></div>
+      ${
+        story.is_premium
+          ? `<span class="absolute top-2 right-2 bg-gold text-navy text-[10px] font-display font-bold px-2 py-0.5 rounded-full shadow">Premium</span>`
+          : ''
+      }
+      <div class="absolute bottom-0 left-0 right-0 p-2.5">
+        <p class="font-display text-sm font-semibold leading-snug text-[color:var(--text-primary)] line-clamp-2">${title}</p>
+      </div>
+    </button>`;
+}
+
+function renderStoriesGrid() {
+  const grid = document.getElementById('stories-grid');
+  const emptyEl = document.getElementById('stories-empty');
+  if (!grid || !emptyEl) return;
+
+  const filtered =
+    activeCategory === 'all'
+      ? allStories
+      : allStories.filter((s) => s.category === activeCategory);
+
+  if (filtered.length === 0) {
+    grid.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    emptyEl.classList.add('flex');
+    return;
   }
 
-  const uuidEl = document.getElementById('status-uuid');
-  if (uuidEl) uuidEl.textContent = currentProfile.id;
+  emptyEl.classList.add('hidden');
+  emptyEl.classList.remove('flex');
+  grid.classList.remove('hidden');
+  grid.innerHTML = filtered.map(storyCardTemplate).join('');
+}
+
+function setHomeState(state) {
+  // state: 'loading' | 'error' | 'ready'
+  const loader = document.getElementById('stories-loader');
+  const errorEl = document.getElementById('stories-error');
+  const grid = document.getElementById('stories-grid');
+  const emptyEl = document.getElementById('stories-empty');
+
+  loader.classList.toggle('hidden', state !== 'loading');
+  errorEl.classList.toggle('hidden', state !== 'error');
+  errorEl.classList.toggle('flex', state === 'error');
+
+  if (state !== 'ready') {
+    grid.classList.add('hidden');
+    emptyEl.classList.add('hidden');
+  }
+}
+
+async function loadHomeData() {
+  if (!supabaseClient) {
+    setHomeState('error');
+    const msg = document.getElementById('stories-error-msg');
+    if (msg) msg.textContent = 'Supabase non configuré — renseignez vos clés dans config.js.';
+    return;
+  }
+
+  setHomeState('loading');
+  const msg = document.getElementById('stories-error-msg');
+  if (msg) msg.textContent = 'Vérifiez votre connexion internet et réessayez.';
+
+  try {
+    const [categories, stories] = await Promise.all([fetchCategories(), fetchStories()]);
+    allCategories = categories;
+    allStories = stories;
+    renderCategoryFilters();
+    renderStoriesGrid();
+    setHomeState('ready');
+  } catch (err) {
+    console.error('[MIJO Story] Erreur de chargement :', err);
+    setHomeState('error');
+  }
+}
+
+function initHome() {
+  const retryBtn = document.getElementById('retry-btn');
+  if (retryBtn) retryBtn.addEventListener('click', loadHomeData);
+  loadHomeData();
 }
 
 /* ---------- Bootstrap ---------- */
 
 document.addEventListener('DOMContentLoaded', () => {
   initProfileUI();
-  initStatusPanel();
+  initHome();
 });
