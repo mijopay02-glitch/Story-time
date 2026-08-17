@@ -134,21 +134,42 @@ async function fetchStories() {
   return data || [];
 }
 
-// Les histoires référencent leur catégorie par nom (colonne `category`),
-// pas par id. On compare ce nom aux 3 variantes linguistiques de la table
-// `categories`, insensible à la casse/aux espaces, pour rester robuste
-// quelle que soit la langue utilisée côté `stories`.
+// Les histoires peuvent référencer leur catégorie de plusieurs façons selon
+// votre schéma : par id (`category_id`), par id stocké dans `category`, ou
+// par nom (fr/en/es). On essaie les trois, dans cet ordre.
 function categoryFor(story) {
-  if (!story) return null;
-  const raw = (story.category || '').trim().toLowerCase();
-  if (!raw) return null;
-  return (
-    allCategories.find((c) =>
-      [c.name_en, c.name_fr, c.name_es].some(
-        (n) => (n || '').trim().toLowerCase() === raw
-      )
-    ) || null
+  if (!story || !allCategories.length) return null;
+
+  if (story.category_id != null) {
+    const byId = allCategories.find((c) => String(c.id) === String(story.category_id));
+    if (byId) return byId;
+  }
+
+  const raw = story.category;
+  if (raw === null || raw === undefined || raw === '') return null;
+
+  if (!isNaN(raw)) {
+    const byNumericId = allCategories.find((c) => String(c.id) === String(raw));
+    if (byNumericId) return byNumericId;
+  }
+
+  const normalized = String(raw).trim().toLowerCase();
+  const byName = allCategories.find((c) =>
+    [c.name_en, c.name_fr, c.name_es].some((n) => (n || '').trim().toLowerCase() === normalized)
   );
+
+  if (!byName) {
+    console.warn(
+      '[MIJO Story] Catégorie introuvable pour l\'histoire',
+      story.id,
+      '— valeur reçue :',
+      JSON.stringify(raw),
+      '— catégories disponibles :',
+      allCategories.map((c) => ({ id: c.id, name_fr: c.name_fr, name_en: c.name_en }))
+    );
+  }
+
+  return byName || null;
 }
 
 function renderCategoryFilters() {
