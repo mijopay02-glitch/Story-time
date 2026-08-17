@@ -72,3 +72,7 @@ input:focus {
 ::selection {
   background: rgba(212, 160, 61, 0.35);
 }
+
+#upgrade-email-input:focus {
+  border-color: var(--accent);
+}
