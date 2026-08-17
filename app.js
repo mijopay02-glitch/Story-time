@@ -176,7 +176,10 @@ function renderCategoryFilters() {
 function storyCardTemplate(story) {
   const title = localizedField(story, 'title');
   return `
-    <button class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[9/16] text-left transition-transform active:scale-[0.97]">
+    <button
+      data-story-id="${story.id}"
+      class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[9/16] text-left transition-transform active:scale-[0.97]"
+    >
       <img
         src="${story.thumbnail_url}"
         alt="${title}"
@@ -263,7 +266,184 @@ async function loadHomeData() {
 function initHome() {
   const retryBtn = document.getElementById('retry-btn');
   if (retryBtn) retryBtn.addEventListener('click', loadHomeData);
+
+  // Délégation d'événement : la grille est régénérée à chaque filtre,
+  // le conteneur, lui, reste le même élément du DOM.
+  const grid = document.getElementById('stories-grid');
+  if (grid) {
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('.story-card');
+      if (!card) return;
+      const story = allStories.find((s) => String(s.id) === card.dataset.storyId);
+      if (story) openReader(story);
+    });
+  }
+
   loadHomeData();
+}
+
+/* ---------- Lecteur immersif ---------- */
+
+const PREMIUM_STORAGE_KEY = 'mijo_story_premium_unlocked';
+
+// Teinte d'accent par catégorie (repli sur le doré de la marque).
+const CATEGORY_ACCENTS = {
+  Psychological: '#9b87f5',
+  Drama: '#ec6f9b',
+  Thriller: '#ef5b52',
+  Adventure: '#34c495',
+  Comedy: '#f2a93b',
+};
+const DEFAULT_ACCENT = '#d4a03d';
+
+const ICON_VOLUME_ON = `<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>`;
+const ICON_VOLUME_OFF = `<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><line x1="16" y1="9" x2="22" y2="15"/><line x1="22" y1="9" x2="16" y2="15"/></svg>`;
+
+let currentReaderStory = null;
+
+function accentFor(story) {
+  return CATEGORY_ACCENTS[story.category] || DEFAULT_ACCENT;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function renderParagraphs(container, text) {
+  if (!container) return;
+  const paragraphs = (text || '').split(/\n{2,}/).filter((p) => p.trim().length > 0);
+  container.innerHTML = paragraphs
+    .map((p) => `<p class="mb-4">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+function isPremiumUnlocked() {
+  return localStorage.getItem(PREMIUM_STORAGE_KEY) === 'true';
+}
+
+function updatePremiumLock(story) {
+  const lock = document.getElementById('premium-lock');
+  const text2 = document.getElementById('reader-text-2');
+  if (!lock || !text2) return;
+
+  const locked = Boolean(story.is_premium) && !isPremiumUnlocked();
+  lock.classList.toggle('hidden', !locked);
+  text2.classList.toggle('blur-sm', locked);
+  text2.classList.toggle('select-none', locked);
+  text2.classList.toggle('pointer-events-none', locked);
+}
+
+function renderAmbientIcon(playing) {
+  const btn = document.getElementById('ambient-toggle-btn');
+  if (!btn) return;
+  btn.innerHTML = playing ? ICON_VOLUME_ON : ICON_VOLUME_OFF;
+  btn.dataset.playing = playing ? 'true' : 'false';
+}
+
+function setupAmbientAudio(category) {
+  const audio = document.getElementById('ambient-audio');
+  const btn = document.getElementById('ambient-toggle-btn');
+  if (!audio || !btn) return;
+
+  const src = category && category.ambient_audio_url ? category.ambient_audio_url : '';
+
+  if (!src) {
+    audio.pause();
+    audio.removeAttribute('src');
+    btn.classList.add('hidden');
+    return;
+  }
+
+  btn.classList.remove('hidden');
+  btn.classList.add('flex');
+  audio.loop = true;
+  audio.src = src;
+
+  // Autoplay tenté ici, dans le prolongement du clic utilisateur sur la
+  // carte d'histoire. Les navigateurs peuvent tout de même le bloquer :
+  // dans ce cas le bouton passe simplement en mode "coupé".
+  audio
+    .play()
+    .then(() => renderAmbientIcon(true))
+    .catch(() => renderAmbientIcon(false));
+}
+
+function toggleAmbient() {
+  const audio = document.getElementById('ambient-audio');
+  if (!audio || !audio.src) return;
+
+  if (audio.paused) {
+    audio
+      .play()
+      .then(() => renderAmbientIcon(true))
+      .catch(() => renderAmbientIcon(false));
+  } else {
+    audio.pause();
+    renderAmbientIcon(false);
+  }
+}
+
+function openReader(story) {
+  currentReaderStory = story;
+  const category = categoryFor(story);
+  const accent = accentFor(story);
+  document.documentElement.style.setProperty('--accent', accent);
+
+  const title = localizedField(story, 'title');
+  const cover = document.getElementById('reader-cover');
+  if (cover) {
+    cover.src = story.thumbnail_url || '';
+    cover.alt = title;
+  }
+
+  const titleEl = document.getElementById('reader-title');
+  if (titleEl) titleEl.textContent = title;
+
+  const categoryEl = document.getElementById('reader-category');
+  if (categoryEl) categoryEl.textContent = category ? localizedField(category, 'name') : '';
+
+  renderParagraphs(document.getElementById('reader-text-1'), localizedField(story, 'text_1'));
+  renderParagraphs(document.getElementById('reader-text-2'), localizedField(story, 'text_2'));
+
+  updatePremiumLock(story);
+  setupAmbientAudio(category);
+
+  const readerView = document.getElementById('reader-view');
+  if (readerView) {
+    readerView.classList.remove('hidden');
+    readerView.scrollTop = 0;
+  }
+  document.body.classList.add('overflow-hidden');
+}
+
+function closeReader() {
+  const audio = document.getElementById('ambient-audio');
+  if (audio) audio.pause();
+
+  const readerView = document.getElementById('reader-view');
+  if (readerView) readerView.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+  currentReaderStory = null;
+}
+
+function initReader() {
+  const backBtn = document.getElementById('reader-back-btn');
+  if (backBtn) backBtn.addEventListener('click', closeReader);
+
+  const ambientBtn = document.getElementById('ambient-toggle-btn');
+  if (ambientBtn) ambientBtn.addEventListener('click', toggleAmbient);
+
+  const unlockBtn = document.getElementById('unlock-btn');
+  if (unlockBtn) {
+    unlockBtn.addEventListener('click', () => {
+      // Simule l'upgrade premium : dans un prochain bloc, ceci déclenchera
+      // le vrai flux de paiement/abonnement.
+      localStorage.setItem(PREMIUM_STORAGE_KEY, 'true');
+      if (currentReaderStory) updatePremiumLock(currentReaderStory);
+    });
+  }
 }
 
 /* ---------- Bootstrap ---------- */
@@ -271,4 +451,5 @@ function initHome() {
 document.addEventListener('DOMContentLoaded', () => {
   initProfileUI();
   initHome();
+  initReader();
 });
