@@ -7,6 +7,15 @@
   --gold-light: #f0cd7c;
   --text-primary: #f3f0e6;
   --text-muted: #8a93ab;
+  --accent: #d4a03d;
+}
+
+/* Texte de lecture : espacement confortable pour la lecture longue */
+.story-text p {
+  margin-bottom: 1rem;
+}
+.story-text p:last-child {
+  margin-bottom: 0;
 }
 
 html,
