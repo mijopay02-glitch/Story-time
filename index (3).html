@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>MIJO Story — Socle</title>
+
+<!-- Polices -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+
+<!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: {
+            DEFAULT: '#0a0f1c',
+            soft: '#121a2e',
+            elevated: '#182342',
+            line: '#24304f',
+          },
+          gold: {
+            DEFAULT: '#d4a03d',
+            light: '#f0cd7c',
+          },
+        },
+        fontFamily: {
+          display: ['Sora', 'sans-serif'],
+          body: ['Inter', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<link rel="stylesheet" href="style.css" />
+
+<!-- Client Supabase (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body class="bg-navy text-[15px] antialiased min-h-screen flex flex-col">
+  <!-- En-tête -->
+  <header class="hero-glow relative border-b border-navy-line">
+    <div class="flex items-center h-1 w-full spine-accent"></div>
+    <div class="flex items-center justify-between px-5 py-4">
+      <div class="flex items-center gap-2">
+        <span class="font-display font-extrabold tracking-tight text-lg text-gold-light">MIJO</span>
+        <span class="font-display font-semibold text-lg text-[color:var(--text-primary)]">Story</span>
+      </div>
+
+      <!-- Profil anonyme -->
+      <button
+        id="edit-pseudo-btn"
+        class="flex items-center gap-2 bg-navy-elevated hover:bg-navy-line transition-colors border border-navy-line rounded-full pl-1.5 pr-3 py-1.5"
+        title="Modifier mon pseudo"
+      >
+        <span
+          class="flex items-center justify-center w-6 h-6 rounded-full bg-gold/20 text-gold-light text-xs font-display font-bold"
+        >L</span>
+        <span id="user-pseudo" class="text-sm font-medium text-[color:var(--text-primary)]"></span>
+        <input
+          id="user-pseudo-input"
+          class="hidden bg-transparent border-b border-gold text-sm font-medium w-28 text-[color:var(--text-primary)]"
+          maxlength="24"
+        />
+      </button>
+    </div>
+  </header>
+
+  <!-- Contenu principal -->
+  <main class="flex-1 px-5 py-8 max-w-md w-full mx-auto">
+    <section class="mb-8">
+      <h1 class="font-display text-2xl font-bold leading-snug">
+        Le socle est prêt.
+      </h1>
+      <p class="text-[color:var(--text-muted)] mt-2 text-sm leading-relaxed">
+        Cette base gère la connexion Supabase et le profil de lecteur anonyme.
+        Les histoires, catégories et le fil viendront se brancher sur cette
+        fondation dans les prochains blocs.
+      </p>
+    </section>
+
+    <!-- Panneau de statut -->
+    <section class="bg-navy-soft border border-navy-line rounded-2xl p-5 space-y-4">
+      <h2 class="font-display text-sm font-semibold text-gold-light uppercase tracking-wide">
+        Statut du socle
+      </h2>
+
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-[color:var(--text-muted)]">Tailwind CSS</span>
+        <span class="text-emerald-400 font-medium">Chargé</span>
+      </div>
+
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-[color:var(--text-muted)]">Supabase</span>
+        <span id="status-supabase" class="font-medium"></span>
+      </div>
+
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-[color:var(--text-muted)]">Profil anonyme</span>
+        <span class="text-emerald-400 font-medium">Actif</span>
+      </div>
+
+      <div class="pt-3 border-t border-navy-line">
+        <p class="text-[color:var(--text-muted)] text-xs mb-1">UUID du lecteur</p>
+        <p id="status-uuid" class="text-xs font-mono text-[color:var(--text-primary)] break-all"></p>
+      </div>
+    </section>
+
+    <p class="text-xs text-[color:var(--text-muted)] mt-6 leading-relaxed">
+      Astuce : touchez votre pseudo en haut à droite pour le modifier — il est
+      enregistré localement sur cet appareil.
+    </p>
+  </main>
+
+  <footer class="px-5 py-4 text-center text-xs text-[color:var(--text-muted)] border-t border-navy-line">
+    MIJO Story — v0.1 (socle)
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

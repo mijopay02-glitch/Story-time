@@ -1,0 +1,48 @@
+:root {
+  --bg-primary: #0a0f1c;
+  --bg-secondary: #121a2e;
+  --bg-elevated: #182342;
+  --line: #24304f;
+  --gold: #d4a03d;
+  --gold-light: #f0cd7c;
+  --text-primary: #f3f0e6;
+  --text-muted: #8a93ab;
+}
+
+html,
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-display {
+  font-family: 'Sora', sans-serif;
+}
+
+/* Voile doré ambiant derrière l'en-tête */
+.hero-glow {
+  background: radial-gradient(
+    120% 100% at 50% -20%,
+    rgba(212, 160, 61, 0.16) 0%,
+    rgba(10, 15, 28, 0) 60%
+  );
+}
+
+/* Liseré doré évoquant une tranche de livre */
+.spine-accent {
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 100%);
+}
+
+.hidden {
+  display: none !important;
+}
+
+input:focus {
+  outline: none;
+}
+
+::selection {
+  background: rgba(212, 160, 61, 0.35);
+}
