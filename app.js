@@ -152,7 +152,13 @@ async function fetchFavorites() {
 // votre schéma : par id (`category_id`), par id stocké dans `category`, ou
 // par nom (fr/en/es). On essaie les trois, dans cet ordre.
 function categoryFor(story) {
-  if (!story || !allCategories.length) return null;
+  if (!story) return null;
+  if (!allCategories.length) {
+    console.warn(
+      '[MIJO Story] allCategories est vide — les catégories ne sont pas (encore) chargées.'
+    );
+    return null;
+  }
 
   if (story.category_id != null) {
     const byId = allCategories.find((c) => String(c.id) === String(story.category_id));
@@ -160,7 +166,16 @@ function categoryFor(story) {
   }
 
   const raw = story.category;
-  if (raw === null || raw === undefined || raw === '') return null;
+  if (raw === null || raw === undefined || raw === '') {
+    console.warn(
+      '[MIJO Story] Le champ "category" est vide pour l\'histoire',
+      story.id,
+      '(titre :',
+      story.title_fr || story.title_en || '?',
+      ')'
+    );
+    return null;
+  }
 
   if (!isNaN(raw)) {
     const byNumericId = allCategories.find((c) => String(c.id) === String(raw));
