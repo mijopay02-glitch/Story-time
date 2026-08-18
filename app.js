@@ -690,7 +690,13 @@ function handleReaderBack() {
   showInterstitialAd(() => closeReader());
 }
 
-/* ---------- Pop-up Upgrade Premium + paiement Google (simulation) ---------- */
+/* ---------- Pop-up Upgrade Premium + paiement Google Play réel ---------- */
+
+// URL de ton Worker Cloudflare de vérification des achats (à créer, voir
+// verify-premium-worker.js). Ce Worker vérifie le purchaseToken auprès de
+// Google avant d'accorder le premium — JAMAIS depuis le client.
+const PREMIUM_VERIFY_URL = 'https://story.mijocomplexe.workers.dev/verify-purchase';
+const PLAY_BILLING_SKU = 'premium_unlock'; // doit correspondre à Play Console
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -716,37 +722,87 @@ function closeUpgradeModal() {
   modal.classList.remove('flex');
 }
 
-// Simule le déclenchement du paiement Google (Google Pay côté web, ou Play
-// Billing côté TWA/app native). En production, remplacez ce corps par :
-//  - Web : chargez https://pay.google.com/gp/p/js/pay.js, créez un
-//    google.payments.api.PaymentsClient, puis appelez
-//    client.loadPaymentData(paymentRequest).
-//  - App Android (TWA/native) : appelez la Google Play Billing Library
-//    (BillingClient.launchBillingFlow) via le pont JS<->Android.
+// Déclenchement du paiement Google Play (Digital Goods API pour TWA).
+// Renvoie le purchaseToken brut — la vérification et l'octroi du premium se
+// font uniquement côté serveur, jamais ici.
 async function triggerGooglePayment() {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true, transactionId: `SIMU-${Date.now()}` });
-    }, 1500);
-  });
+  if (!('getDigitalGoodsService' in window)) {
+    console.warn(
+      '[MIJO Story] Digital Goods API introuvable — hors TWA/app Play Store. ' +
+      'Aucun paiement réel possible dans ce contexte (navigateur desktop, etc.).'
+    );
+    throw new Error(
+      "Le paiement réel n'est disponible que dans l'application Android (Play Store)."
+    );
+  }
+
+  try {
+    const service = await window.getDigitalGoodsService('https://play.google.com/billing');
+
+    const paymentMethods = [
+      {
+        supportedMethods: 'https://play.google.com/billing',
+        data: { sku: PLAY_BILLING_SKU },
+      },
+    ];
+    const paymentDetails = {
+      total: {
+        label: 'MIJO Story Premium',
+        // Le montant réel affiché à l'utilisateur vient de la fiche produit
+        // configurée dans Play Console — cette valeur n'est qu'indicative.
+        amount: { value: '1.99', currency: 'USD' },
+      },
+    };
+
+    const request = new PaymentRequest(paymentMethods, paymentDetails);
+    const paymentResponse = await request.show();
+    const purchaseToken = paymentResponse.details.purchaseToken;
+
+    // On ferme la fenêtre de paiement immédiatement. L'acknowledge officiel
+    // Google (celui qui empêche le remboursement automatique) est fait par
+    // le serveur après vérification — voir verifyPurchaseOnServer().
+    await paymentResponse.complete('success');
+
+    return { success: true, purchaseToken };
+  } catch (err) {
+    console.error('[MIJO Story] Erreur Play Billing :', err);
+    throw new Error('Paiement annulé ou échoué');
+  }
 }
 
-async function activatePremiumAccount(email) {
+// Envoie le purchaseToken au Worker pour vérification server-side auprès de
+// Google, puis octroi du premium dans Supabase. C'est la SEULE source de
+// vérité — le client ne décide jamais lui-même d'activer le premium.
+async function verifyPurchaseOnServer(purchaseToken, email) {
+  const response = await fetch(PREMIUM_VERIFY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: currentProfile.id,
+      pseudo: currentProfile.pseudo,
+      email,
+      purchaseToken,
+      sku: PLAY_BILLING_SKU,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `Vérification échouée (${response.status})`);
+  }
+
+  const result = await response.json();
+  if (!result.success) throw new Error(result.error || 'Achat non valide');
+  return result;
+}
+
+// Reflète l'état premium localement UNIQUEMENT après confirmation du
+// serveur. N'écrit plus jamais directement dans Supabase depuis le client.
+function reflectPremiumUnlocked(email) {
   localStorage.setItem(PREMIUM_STORAGE_KEY, 'true');
   currentProfile.email = email;
   saveProfile(currentProfile);
-
   if (currentReaderStory) updatePremiumLock(currentReaderStory);
-
-  if (!supabaseClient) return; // mode démo sans Supabase configuré
-
-  const { error } = await supabaseClient
-    .from('users')
-    .upsert(
-      { id: currentProfile.id, pseudo: currentProfile.pseudo, email, is_premium: true },
-      { onConflict: 'id' }
-    );
-  if (error) console.error('[MIJO Story] Erreur mise à jour utilisateur premium :', error);
 }
 
 async function handleGooglePayClick() {
@@ -765,13 +821,16 @@ async function handleGooglePayClick() {
   errorEl.classList.add('hidden');
 
   btn.disabled = true;
-  label.textContent = 'Traitement du paiement…';
+  label.textContent = 'Ouverture du paiement…';
 
   try {
     const payment = await triggerGooglePayment();
     if (!payment.success) throw new Error('Paiement refusé');
 
-    await activatePremiumAccount(email);
+    label.textContent = 'Vérification du paiement…';
+    await verifyPurchaseOnServer(payment.purchaseToken, email);
+
+    reflectPremiumUnlocked(email);
 
     label.textContent = 'Paiement réussi';
     setTimeout(() => {
@@ -781,7 +840,7 @@ async function handleGooglePayClick() {
     }, 700);
   } catch (err) {
     console.error('[MIJO Story] Erreur de paiement :', err);
-    errorEl.textContent = 'Le paiement a échoué. Réessayez.';
+    errorEl.textContent = err.message || 'Le paiement a échoué. Réessayez.';
     errorEl.classList.remove('hidden');
     btn.disabled = false;
     label.textContent = 'Payer avec Google Pay';
