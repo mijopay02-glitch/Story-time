@@ -469,6 +469,26 @@ function setupAmbientAudio(category) {
   const btn = document.getElementById('ambient-toggle-btn');
   if (!audio || !btn) return;
 
+  // Diagnostic : capte les erreurs de chargement du <audio> (404, format
+  // non supporté, CORS, etc.) qui ne remontent pas via le .catch() de play().
+  if (!audio.dataset.errorListenerAttached) {
+    audio.addEventListener('error', () => {
+      const mediaError = audio.error;
+      const codes = {
+        1: 'MEDIA_ERR_ABORTED',
+        2: 'MEDIA_ERR_NETWORK',
+        3: 'MEDIA_ERR_DECODE',
+        4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
+      };
+      console.error(
+        '[MIJO Story] Erreur de chargement audio :',
+        audio.src,
+        mediaError ? codes[mediaError.code] || mediaError.code : 'inconnue'
+      );
+    });
+    audio.dataset.errorListenerAttached = 'true';
+  }
+
   const src = category && category.ambient_audio_url ? category.ambient_audio_url : '';
 
   if (!src) {
@@ -486,7 +506,13 @@ function setupAmbientAudio(category) {
   btn.classList.remove('hidden');
   btn.classList.add('flex');
   audio.loop = true;
-  audio.src = src;
+
+  // On ne réassigne le src que s'il change réellement : réassigner le
+  // même src relance un rechargement inutile (et peut interrompre un
+  // play() en cours sur certains navigateurs).
+  if (audio.getAttribute('src') !== src) {
+    audio.src = src;
+  }
 
   // Autoplay tenté ici, dans le prolongement du clic utilisateur sur la
   // carte d'histoire. Les navigateurs peuvent tout de même le bloquer :
@@ -494,7 +520,16 @@ function setupAmbientAudio(category) {
   audio
     .play()
     .then(() => renderAmbientIcon(true))
-    .catch(() => renderAmbientIcon(false));
+    .catch((err) => {
+      console.warn(
+        '[MIJO Story] Lecture audio bloquée ou échouée pour :',
+        src,
+        '\nRaison :',
+        err && err.name,
+        err && err.message
+      );
+      renderAmbientIcon(false);
+    });
 }
 
 function toggleAmbient() {
@@ -505,7 +540,14 @@ function toggleAmbient() {
     audio
       .play()
       .then(() => renderAmbientIcon(true))
-      .catch(() => renderAmbientIcon(false));
+      .catch((err) => {
+        console.warn(
+          '[MIJO Story] Lecture audio bloquée ou échouée (bouton) :',
+          err && err.name,
+          err && err.message
+        );
+        renderAmbientIcon(false);
+      });
   } else {
     audio.pause();
     renderAmbientIcon(false);
