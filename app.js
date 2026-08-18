@@ -151,40 +151,74 @@ async function fetchFavorites() {
 // Les histoires peuvent référencer leur catégorie de plusieurs façons selon
 // votre schéma : par id (`category_id`), par id stocké dans `category`, ou
 // par nom (fr/en/es). On essaie les trois, dans cet ordre.
-// Fonction utilitaire pour retirer les accents et les espaces
-function normalizeString(str) {
-  if (!str) return '';
-  return String(str)
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // Retire tous les accents (é, è, à -> e, e, a)
-}
-
 function categoryFor(story) {
   if (!story || !allCategories.length) return null;
 
-  // On récupère le nom depuis la colonne "category"
+  if (story.category_id != null) {
+    const byId = allCategories.find((c) => String(c.id) === String(story.category_id));
+    if (byId) return byId;
+  }
+
   const raw = story.category;
-  if (!raw) return null;
+  if (raw === null || raw === undefined || raw === '') return null;
 
-  // On nettoie le mot de l'histoire (ex: "Comédie " -> "comedie")
-  const normalizedTarget = normalizeString(raw);
+  if (!isNaN(raw)) {
+    const byNumericId = allCategories.find((c) => String(c.id) === String(raw));
+    if (byNumericId) return byNumericId;
+  }
 
-  // On cherche la correspondance dans les catégories en nettoyant aussi
-  const byName = allCategories.find((c) => {
-    const fr = normalizeString(c.name_fr);
-    const en = normalizeString(c.name_en);
-    const es = normalizeString(c.name_es);
-    return fr === normalizedTarget || en === normalizedTarget || es === normalizedTarget;
-  });
+  const normalized = String(raw).trim().toLowerCase();
+  const byName = allCategories.find((c) =>
+    [c.name_en, c.name_fr, c.name_es].some((n) => (n || '').trim().toLowerCase() === normalized)
+  );
 
   if (!byName) {
-    console.warn(`[MIJO Story] Impossible de lier l'histoire. "${raw}" ne correspond à aucune catégorie de ta base.`);
+    console.warn(
+      '[MIJO Story] Catégorie introuvable pour l\'histoire',
+      story.id,
+      '— valeur reçue :',
+      JSON.stringify(raw),
+      '— catégories disponibles :',
+      allCategories.map((c) => ({ id: c.id, name_fr: c.name_fr, name_en: c.name_en }))
+    );
   }
 
   return byName || null;
 }
+
+function renderCategoryFilters() {
+  const nav = document.getElementById('category-filters');
+  if (!nav) return;
+
+  const pills = [
+    { key: 'all', label: 'Toutes' },
+    ...allCategories.map((c) => ({ key: String(c.id), label: localizedField(c, 'name') })),
+  ];
+
+  nav.innerHTML = pills
+    .map((p) => {
+      const active = p.key === activeCategory;
+      return `<button
+          data-category="${p.key}"
+          class="filter-pill shrink-0 px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            active
+              ? 'bg-gold text-navy border-gold'
+              : 'bg-navy-elevated text-[color:var(--text-muted)] border-navy-line hover:border-gold/50'
+          }"
+        >${p.label}</button>`;
+    })
+    .join('');
+
+  nav.querySelectorAll('.filter-pill').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.category === activeCategory) return;
+      activeCategory = btn.dataset.category;
+      renderCategoryFilters();
+      renderStoriesGrid();
+    });
+  });
+}
+
 function heartIcon(filled) {
   return filled
     ? `<svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-rose-400" fill="currentColor"><path d="M12 21s-6.7-4.35-9.33-8.2C1.02 10.28 1.9 6.7 5.1 5.6c2-.7 3.9.1 4.9 1.7 1-1.6 2.9-2.4 4.9-1.7 3.2 1.1 4.08 4.68 2.43 7.2C18.7 16.65 12 21 12 21z"/></svg>`
