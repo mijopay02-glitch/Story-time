@@ -101,9 +101,154 @@ function initProfileUI() {
   }
 }
 
-/* ---------- Accueil : catégories + histoires ---------- */
+/* ---------- Langue / i18n ---------- */
 
-const APP_LANG = 'fr'; // langue d'affichage par défaut (fr / en / es)
+const LANG_STORAGE_KEY = 'mijo_story_lang';
+const SUPPORTED_LANGS = ['fr', 'en', 'es'];
+
+const I18N = {
+  fr: {
+    filter_all: 'Toutes',
+    loading: 'Chargement des histoires…',
+    error_title: 'Impossible de charger les histoires',
+    error_msg: 'Vérifiez votre connexion internet et réessayez.',
+    retry: 'Réessayer',
+    empty_title: 'Aucune histoire ici',
+    empty_msg: "Cette catégorie ne contient pas encore d'histoire.",
+    premium_badge: 'Premium',
+    premium_lock_title: 'Histoire réservée aux membres',
+    premium_lock_body: 'Débloquez la suite et toutes les histoires premium de MIJO Story.',
+    unlock_btn: "Débloquer l'histoire",
+    premium_modal_title: 'Bientôt disponible',
+    premium_modal_body: 'Le contenu premium et les paiements arrivent prochainement. Revenez bientôt !',
+    premium_modal_ok: 'Compris',
+    lang_select_prompt: 'Choisissez votre langue',
+  },
+  en: {
+    filter_all: 'All',
+    loading: 'Loading stories…',
+    error_title: 'Unable to load stories',
+    error_msg: 'Check your internet connection and try again.',
+    retry: 'Retry',
+    empty_title: 'No stories here',
+    empty_msg: "This category doesn't have any stories yet.",
+    premium_badge: 'Premium',
+    premium_lock_title: 'Members-only story',
+    premium_lock_body: 'Unlock the rest and all of MIJO Story\'s premium stories.',
+    unlock_btn: 'Unlock story',
+    premium_modal_title: 'Coming soon',
+    premium_modal_body: 'Premium content and payments are coming soon. Check back!',
+    premium_modal_ok: 'Got it',
+    lang_select_prompt: 'Choose your language',
+  },
+  es: {
+    filter_all: 'Todas',
+    loading: 'Cargando historias…',
+    error_title: 'No se pudieron cargar las historias',
+    error_msg: 'Verifica tu conexión a internet e inténtalo de nuevo.',
+    retry: 'Reintentar',
+    empty_title: 'No hay historias aquí',
+    empty_msg: 'Esta categoría todavía no tiene historias.',
+    premium_badge: 'Premium',
+    premium_lock_title: 'Historia solo para miembros',
+    premium_lock_body: 'Desbloquea el resto y todas las historias premium de MIJO Story.',
+    unlock_btn: 'Desbloquear historia',
+    premium_modal_title: 'Próximamente',
+    premium_modal_body: 'El contenido premium y los pagos llegarán pronto. ¡Vuelve pronto!',
+    premium_modal_ok: 'Entendido',
+    lang_select_prompt: 'Elige tu idioma',
+  },
+};
+
+function getStoredLang() {
+  const stored = localStorage.getItem(LANG_STORAGE_KEY);
+  return SUPPORTED_LANGS.includes(stored) ? stored : null;
+}
+
+let APP_LANG = getStoredLang() || 'fr';
+
+function t(key) {
+  return (I18N[APP_LANG] && I18N[APP_LANG][key]) || I18N.fr[key] || key;
+}
+
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+}
+
+// Rafraîchit uniquement le texte du lecteur (titre, catégorie, paragraphes)
+// sans relancer l'audio d'ambiance ni fermer/rouvrir la vue.
+function refreshReaderLanguage() {
+  if (!currentReaderStory) return;
+  const story = currentReaderStory;
+  const category = categoryFor(story);
+
+  const titleEl = document.getElementById('reader-title');
+  if (titleEl) titleEl.textContent = localizedField(story, 'title');
+
+  const categoryEl = document.getElementById('reader-category');
+  if (categoryEl) categoryEl.textContent = category ? localizedField(category, 'name') : '';
+
+  renderParagraphs(document.getElementById('reader-text-1'), localizedField(story, 'text_1'));
+  renderParagraphs(document.getElementById('reader-text-2'), localizedField(story, 'text_2'));
+}
+
+function setLang(lang) {
+  if (!SUPPORTED_LANGS.includes(lang)) return;
+  APP_LANG = lang;
+  localStorage.setItem(LANG_STORAGE_KEY, lang);
+  applyStaticTranslations();
+  renderCategoryFilters();
+  renderStoriesGrid();
+  refreshReaderLanguage();
+}
+
+function showLanguageModal({ mandatory }) {
+  const modal = document.getElementById('lang-modal');
+  const closeBtn = document.getElementById('lang-close-btn');
+  if (!modal) return;
+
+  if (closeBtn) closeBtn.classList.toggle('hidden', mandatory);
+  if (closeBtn) closeBtn.classList.toggle('flex', !mandatory);
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  modal.dataset.mandatory = mandatory ? 'true' : 'false';
+}
+
+function hideLanguageModal() {
+  const modal = document.getElementById('lang-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function initLanguage() {
+  const modal = document.getElementById('lang-modal');
+  const closeBtn = document.getElementById('lang-close-btn');
+  const settingsBtn = document.getElementById('lang-settings-btn');
+
+  if (modal) {
+    modal.querySelectorAll('.lang-option-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const wasMandatory = modal.dataset.mandatory === 'true';
+        setLang(btn.dataset.lang);
+        hideLanguageModal();
+        if (wasMandatory) initHome();
+      });
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal && modal.dataset.mandatory !== 'true') hideLanguageModal();
+    });
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', hideLanguageModal);
+  if (settingsBtn) settingsBtn.addEventListener('click', () => showLanguageModal({ mandatory: false }));
+}
+
+/* ---------- Accueil : catégories + histoires ---------- */
 
 let allCategories = [];
 let allStories = [];
@@ -152,13 +297,7 @@ async function fetchFavorites() {
 // votre schéma : par id (`category_id`), par id stocké dans `category`, ou
 // par nom (fr/en/es). On essaie les trois, dans cet ordre.
 function categoryFor(story) {
-  if (!story) return null;
-  if (!allCategories.length) {
-    console.warn(
-      '[MIJO Story] allCategories est vide — les catégories ne sont pas (encore) chargées.'
-    );
-    return null;
-  }
+  if (!story || !allCategories.length) return null;
 
   if (story.category_id != null) {
     const byId = allCategories.find((c) => String(c.id) === String(story.category_id));
@@ -166,16 +305,7 @@ function categoryFor(story) {
   }
 
   const raw = story.category;
-  if (raw === null || raw === undefined || raw === '') {
-    console.warn(
-      '[MIJO Story] Le champ "category" est vide pour l\'histoire',
-      story.id,
-      '(titre :',
-      story.title_fr || story.title_en || '?',
-      ')'
-    );
-    return null;
-  }
+  if (raw === null || raw === undefined || raw === '') return null;
 
   if (!isNaN(raw)) {
     const byNumericId = allCategories.find((c) => String(c.id) === String(raw));
@@ -206,7 +336,7 @@ function renderCategoryFilters() {
   if (!nav) return;
 
   const pills = [
-    { key: 'all', label: 'Toutes' },
+    { key: 'all', label: t('filter_all') },
     ...allCategories.map((c) => ({ key: String(c.id), label: localizedField(c, 'name') })),
   ];
 
@@ -247,7 +377,7 @@ function storyCardTemplate(story) {
     <div class="relative">
       <button
         data-story-id="${story.id}"
-        class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[9/16] text-left transition-transform active:scale-[0.97] w-full"
+        class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[2/3] text-left w-full"
       >
         <img
           src="${story.thumbnail_url}"
@@ -258,7 +388,7 @@ function storyCardTemplate(story) {
         <div class="absolute inset-0 bg-gradient-to-t from-navy via-navy/10 to-transparent"></div>
         ${
           story.is_premium
-            ? `<span class="absolute top-2 right-2 bg-gold text-navy text-[10px] font-display font-bold px-2 py-0.5 rounded-full shadow">Premium</span>`
+            ? `<span class="absolute top-2 right-2 bg-gold text-navy text-[10px] font-display font-bold px-2 py-0.5 rounded-full shadow">${t('premium_badge')}</span>`
             : ''
         }
         <div class="absolute bottom-0 left-0 right-0 p-2.5">
@@ -329,7 +459,7 @@ async function loadHomeData() {
 
   setHomeState('loading');
   const msg = document.getElementById('stories-error-msg');
-  if (msg) msg.textContent = 'Vérifiez votre connexion internet et réessayez.';
+  if (msg) msg.textContent = t('error_msg');
 
   try {
     const [categories, stories, favorites] = await Promise.all([
@@ -484,26 +614,6 @@ function setupAmbientAudio(category) {
   const btn = document.getElementById('ambient-toggle-btn');
   if (!audio || !btn) return;
 
-  // Diagnostic : capte les erreurs de chargement du <audio> (404, format
-  // non supporté, CORS, etc.) qui ne remontent pas via le .catch() de play().
-  if (!audio.dataset.errorListenerAttached) {
-    audio.addEventListener('error', () => {
-      const mediaError = audio.error;
-      const codes = {
-        1: 'MEDIA_ERR_ABORTED',
-        2: 'MEDIA_ERR_NETWORK',
-        3: 'MEDIA_ERR_DECODE',
-        4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
-      };
-      console.error(
-        '[MIJO Story] Erreur de chargement audio :',
-        audio.src,
-        mediaError ? codes[mediaError.code] || mediaError.code : 'inconnue'
-      );
-    });
-    audio.dataset.errorListenerAttached = 'true';
-  }
-
   const src = category && category.ambient_audio_url ? category.ambient_audio_url : '';
 
   if (!src) {
@@ -521,13 +631,7 @@ function setupAmbientAudio(category) {
   btn.classList.remove('hidden');
   btn.classList.add('flex');
   audio.loop = true;
-
-  // On ne réassigne le src que s'il change réellement : réassigner le
-  // même src relance un rechargement inutile (et peut interrompre un
-  // play() en cours sur certains navigateurs).
-  if (audio.getAttribute('src') !== src) {
-    audio.src = src;
-  }
+  audio.src = src;
 
   // Autoplay tenté ici, dans le prolongement du clic utilisateur sur la
   // carte d'histoire. Les navigateurs peuvent tout de même le bloquer :
@@ -535,16 +639,7 @@ function setupAmbientAudio(category) {
   audio
     .play()
     .then(() => renderAmbientIcon(true))
-    .catch((err) => {
-      console.warn(
-        '[MIJO Story] Lecture audio bloquée ou échouée pour :',
-        src,
-        '\nRaison :',
-        err && err.name,
-        err && err.message
-      );
-      renderAmbientIcon(false);
-    });
+    .catch(() => renderAmbientIcon(false));
 }
 
 function toggleAmbient() {
@@ -555,14 +650,7 @@ function toggleAmbient() {
     audio
       .play()
       .then(() => renderAmbientIcon(true))
-      .catch((err) => {
-        console.warn(
-          '[MIJO Story] Lecture audio bloquée ou échouée (bouton) :',
-          err && err.name,
-          err && err.message
-        );
-        renderAmbientIcon(false);
-      });
+      .catch(() => renderAmbientIcon(false));
   } else {
     audio.pause();
     renderAmbientIcon(false);
@@ -638,79 +726,29 @@ function initReader() {
   if (unlockBtn) unlockBtn.addEventListener('click', openUpgradeModal);
 
   initUpgradeModal();
-  initAdInterstitial();
-}
-
-/* ---------- Publicité interstitielle (déclenchée par "Retour") ---------- */
-
-function showInterstitialAd(onDismiss) {
-  const overlay = document.getElementById('ad-interstitial');
-  const closeBtn = document.getElementById('ad-close-btn');
-  const countdownEl = document.getElementById('ad-countdown');
-
-  if (!overlay || !closeBtn || !countdownEl) {
-    onDismiss();
-    return;
-  }
-
-  let remaining = 3 + Math.floor(Math.random() * 3); // 3 à 5 secondes
-  closeBtn.disabled = true;
-  countdownEl.textContent = `Fermeture dans ${remaining}s`;
-  overlay.classList.remove('hidden');
-  overlay.classList.add('flex');
-
-  const timer = setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) {
-      clearInterval(timer);
-      closeBtn.disabled = false;
-      countdownEl.textContent = 'Vous pouvez fermer';
-    } else {
-      countdownEl.textContent = `Fermeture dans ${remaining}s`;
-    }
-  }, 1000);
-
-  function handleClose() {
-    clearInterval(timer);
-    overlay.classList.add('hidden');
-    overlay.classList.remove('flex');
-    closeBtn.removeEventListener('click', handleClose);
-    onDismiss();
-  }
-
-  closeBtn.addEventListener('click', handleClose);
-}
-
-function initAdInterstitial() {
-  // Rien à initialiser ici pour l'instant : showInterstitialAd() attache et
-  // détache elle-même son écouteur à chaque affichage.
 }
 
 function handleReaderBack() {
-  showInterstitialAd(() => closeReader());
+  // Publicité interstitielle retirée. Le retour ferme directement le
+  // lecteur — pour la réintroduire plus tard, réinsérer ici un appel à un
+  // éventuel showInterstitialAd(() => closeReader()).
+  closeReader();
 }
 
-/* ---------- Pop-up Upgrade Premium + paiement Google Play réel ---------- */
-
-// URL de ton Worker Cloudflare de vérification des achats (à créer, voir
-// verify-premium-worker.js). Ce Worker vérifie le purchaseToken auprès de
-// Google avant d'accorder le premium — JAMAIS depuis le client.
-const PREMIUM_VERIFY_URL = 'https://story.mijocomplexe.workers.dev/verify-purchase';
-const PLAY_BILLING_SKU = 'premium_unlock'; // doit correspondre à Play Console
-
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
+/* ---------- Pop-up Premium : "bientôt disponible" ----------
+ * Le paiement réel (Google Play Billing) n'est pas branché pour l'instant.
+ * Toute la structure reste en place pour l'activer plus tard :
+ *   1. Réintroduire le formulaire/bouton de paiement dans le modal HTML.
+ *   2. Remplacer le corps de openUpgradeModal() ci-dessous par l'ouverture
+ *      du vrai flux de paiement, en s'appuyant sur triggerGooglePayment()
+ *      et un Worker de vérification serveur (voir verify-premium-worker.js
+ *      fourni précédemment) — NE JAMAIS accorder le premium côté client
+ *      sans vérification serveur.
+ */
 
 function openUpgradeModal() {
   const modal = document.getElementById('upgrade-modal');
-  const emailInput = document.getElementById('upgrade-email-input');
-  const errorEl = document.getElementById('upgrade-error');
   if (!modal) return;
-
-  if (emailInput) emailInput.value = currentProfile.email || '';
-  if (errorEl) errorEl.classList.add('hidden');
-
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
@@ -722,138 +760,13 @@ function closeUpgradeModal() {
   modal.classList.remove('flex');
 }
 
-// Déclenchement du paiement Google Play (Digital Goods API pour TWA).
-// Renvoie le purchaseToken brut — la vérification et l'octroi du premium se
-// font uniquement côté serveur, jamais ici.
-async function triggerGooglePayment() {
-  if (!('getDigitalGoodsService' in window)) {
-    console.warn(
-      '[MIJO Story] Digital Goods API introuvable — hors TWA/app Play Store. ' +
-      'Aucun paiement réel possible dans ce contexte (navigateur desktop, etc.).'
-    );
-    throw new Error(
-      "Le paiement réel n'est disponible que dans l'application Android (Play Store)."
-    );
-  }
-
-  try {
-    const service = await window.getDigitalGoodsService('https://play.google.com/billing');
-
-    const paymentMethods = [
-      {
-        supportedMethods: 'https://play.google.com/billing',
-        data: { sku: PLAY_BILLING_SKU },
-      },
-    ];
-    const paymentDetails = {
-      total: {
-        label: 'MIJO Story Premium',
-        // Le montant réel affiché à l'utilisateur vient de la fiche produit
-        // configurée dans Play Console — cette valeur n'est qu'indicative.
-        amount: { value: '1.99', currency: 'USD' },
-      },
-    };
-
-    const request = new PaymentRequest(paymentMethods, paymentDetails);
-    const paymentResponse = await request.show();
-    const purchaseToken = paymentResponse.details.purchaseToken;
-
-    // On ferme la fenêtre de paiement immédiatement. L'acknowledge officiel
-    // Google (celui qui empêche le remboursement automatique) est fait par
-    // le serveur après vérification — voir verifyPurchaseOnServer().
-    await paymentResponse.complete('success');
-
-    return { success: true, purchaseToken };
-  } catch (err) {
-    console.error('[MIJO Story] Erreur Play Billing :', err);
-    throw new Error('Paiement annulé ou échoué');
-  }
-}
-
-// Envoie le purchaseToken au Worker pour vérification server-side auprès de
-// Google, puis octroi du premium dans Supabase. C'est la SEULE source de
-// vérité — le client ne décide jamais lui-même d'activer le premium.
-async function verifyPurchaseOnServer(purchaseToken, email) {
-  const response = await fetch(PREMIUM_VERIFY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userId: currentProfile.id,
-      pseudo: currentProfile.pseudo,
-      email,
-      purchaseToken,
-      sku: PLAY_BILLING_SKU,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `Vérification échouée (${response.status})`);
-  }
-
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error || 'Achat non valide');
-  return result;
-}
-
-// Reflète l'état premium localement UNIQUEMENT après confirmation du
-// serveur. N'écrit plus jamais directement dans Supabase depuis le client.
-function reflectPremiumUnlocked(email) {
-  localStorage.setItem(PREMIUM_STORAGE_KEY, 'true');
-  currentProfile.email = email;
-  saveProfile(currentProfile);
-  if (currentReaderStory) updatePremiumLock(currentReaderStory);
-}
-
-async function handleGooglePayClick() {
-  const emailInput = document.getElementById('upgrade-email-input');
-  const errorEl = document.getElementById('upgrade-error');
-  const btn = document.getElementById('google-pay-btn');
-  const label = document.getElementById('google-pay-label');
-  if (!emailInput || !errorEl || !btn || !label) return;
-
-  const email = emailInput.value.trim();
-  if (!isValidEmail(email)) {
-    errorEl.textContent = 'Veuillez saisir une adresse email valide.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-  errorEl.classList.add('hidden');
-
-  btn.disabled = true;
-  label.textContent = 'Ouverture du paiement…';
-
-  try {
-    const payment = await triggerGooglePayment();
-    if (!payment.success) throw new Error('Paiement refusé');
-
-    label.textContent = 'Vérification du paiement…';
-    await verifyPurchaseOnServer(payment.purchaseToken, email);
-
-    reflectPremiumUnlocked(email);
-
-    label.textContent = 'Paiement réussi';
-    setTimeout(() => {
-      closeUpgradeModal();
-      btn.disabled = false;
-      label.textContent = 'Payer avec Google Pay';
-    }, 700);
-  } catch (err) {
-    console.error('[MIJO Story] Erreur de paiement :', err);
-    errorEl.textContent = err.message || 'Le paiement a échoué. Réessayez.';
-    errorEl.classList.remove('hidden');
-    btn.disabled = false;
-    label.textContent = 'Payer avec Google Pay';
-  }
-}
-
 function initUpgradeModal() {
   const modal = document.getElementById('upgrade-modal');
   const closeBtn = document.getElementById('upgrade-close-btn');
-  const payBtn = document.getElementById('google-pay-btn');
+  const okBtn = document.getElementById('upgrade-ok-btn');
 
   if (closeBtn) closeBtn.addEventListener('click', closeUpgradeModal);
-  if (payBtn) payBtn.addEventListener('click', handleGooglePayClick);
+  if (okBtn) okBtn.addEventListener('click', closeUpgradeModal);
   if (modal) {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeUpgradeModal();
@@ -865,6 +778,16 @@ function initUpgradeModal() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initProfileUI();
-  initHome();
+  initLanguage();
   initReader();
+
+  if (getStoredLang()) {
+    applyStaticTranslations();
+    initHome();
+  } else {
+    // Premier lancement : on force le choix de la langue avant de charger
+    // le contenu. initHome() est déclenché juste après la sélection (voir
+    // initLanguage()).
+    showLanguageModal({ mandatory: true });
+  }
 });
