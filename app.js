@@ -123,6 +123,15 @@ const I18N = {
     premium_modal_body: 'Le contenu premium et les paiements arrivent prochainement. Revenez bientôt !',
     premium_modal_ok: 'Compris',
     lang_select_prompt: 'Choisissez votre langue',
+    search_placeholder: 'Rechercher un titre…',
+    browse_all: 'Parcourir tout',
+    offline_banner: 'Mode hors-ligne — contenu enregistré affiché.',
+    resume_row: 'Reprendre la lecture',
+    trending_row: 'Tendances',
+    new_row: 'Nouveautés',
+    because_liked_prefix: 'Parce que tu as aimé',
+    history_row: 'Historique de lecture',
+    no_search_results: 'Aucun résultat pour cette recherche.',
   },
   en: {
     filter_all: 'All',
@@ -140,6 +149,15 @@ const I18N = {
     premium_modal_body: 'Premium content and payments are coming soon. Check back!',
     premium_modal_ok: 'Got it',
     lang_select_prompt: 'Choose your language',
+    search_placeholder: 'Search a title…',
+    browse_all: 'Browse all',
+    offline_banner: 'Offline mode — showing saved content.',
+    resume_row: 'Continue reading',
+    trending_row: 'Trending',
+    new_row: 'New releases',
+    because_liked_prefix: 'Because you liked',
+    history_row: 'Reading history',
+    no_search_results: 'No results for this search.',
   },
   es: {
     filter_all: 'Todas',
@@ -157,6 +175,15 @@ const I18N = {
     premium_modal_body: 'El contenido premium y los pagos llegarán pronto. ¡Vuelve pronto!',
     premium_modal_ok: 'Entendido',
     lang_select_prompt: 'Elige tu idioma',
+    search_placeholder: 'Buscar un título…',
+    browse_all: 'Explorar todo',
+    offline_banner: 'Modo sin conexión — mostrando contenido guardado.',
+    resume_row: 'Seguir leyendo',
+    trending_row: 'Tendencias',
+    new_row: 'Novedades',
+    because_liked_prefix: 'Porque te gustó',
+    history_row: 'Historial de lectura',
+    no_search_results: 'Sin resultados para esta búsqueda.',
   },
 };
 
@@ -174,6 +201,9 @@ function t(key) {
 function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
   });
 }
 
@@ -200,6 +230,7 @@ function setLang(lang) {
   localStorage.setItem(LANG_STORAGE_KEY, lang);
   applyStaticTranslations();
   renderCategoryFilters();
+  renderRowsSection();
   renderStoriesGrid();
   refreshReaderLanguage();
 }
@@ -370,11 +401,14 @@ function heartIcon(filled) {
     : `<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.7-4.35-9.33-8.2C1.02 10.28 1.9 6.7 5.1 5.6c2-.7 3.9.1 4.9 1.7 1-1.6 2.9-2.4 4.9-1.7 3.2 1.1 4.08 4.68 2.43 7.2C18.7 16.65 12 21 12 21z"/></svg>`;
 }
 
-function storyCardTemplate(story) {
+function storyCardTemplate(story, opts = {}) {
   const title = localizedField(story, 'title');
   const isFav = favoriteStoryIds.has(String(story.id));
+  const progress = opts.progressPercent;
+  const extraClass = opts.extraClass || '';
+  const extraStyle = opts.extraStyle || '';
   return `
-    <div class="relative">
+    <div class="relative ${extraClass}" style="${extraStyle}">
       <button
         data-story-id="${story.id}"
         class="story-card group relative rounded-xl overflow-hidden border border-navy-line bg-navy-soft aspect-[2/3] text-left w-full"
@@ -394,6 +428,11 @@ function storyCardTemplate(story) {
         <div class="absolute bottom-0 left-0 right-0 p-2.5">
           <p class="font-display text-sm font-semibold leading-snug text-[color:var(--text-primary)] line-clamp-2">${title}</p>
         </div>
+        ${
+          typeof progress === 'number'
+            ? `<div class="absolute bottom-0 left-0 right-0 card-progress-track"><div class="card-progress-fill" style="width:${progress}%"></div></div>`
+            : ''
+        }
       </button>
 
       <button
@@ -406,12 +445,30 @@ function storyCardTemplate(story) {
     </div>`;
 }
 
+// Wrapper à largeur fixe pour les cartes utilisées dans les rangées
+// horizontales (contrairement à la grille, qui est en colonnes fluides).
+function rowCardTemplate(story, opts, index) {
+  return storyCardTemplate(story, {
+    ...opts,
+    extraClass: `story-row-card w-28 sm:w-32 shrink-0 card-fade-in ${opts && opts.extraClass ? opts.extraClass : ''}`,
+    extraStyle: `animation-delay:${index * 40}ms`,
+  });
+}
+
+let searchQuery = '';
+
+function matchesSearch(story, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return ['title_fr', 'title_en', 'title_es'].some((f) => (story[f] || '').toLowerCase().includes(q));
+}
+
 function renderStoriesGrid() {
   const grid = document.getElementById('stories-grid');
   const emptyEl = document.getElementById('stories-empty');
   if (!grid || !emptyEl) return;
 
-  const filtered =
+  const base =
     activeCategory === 'all'
       ? allStories
       : allStories.filter((s) => {
@@ -419,17 +476,183 @@ function renderStoriesGrid() {
           return cat && String(cat.id) === activeCategory;
         });
 
+  const filtered = base.filter((s) => matchesSearch(s, searchQuery));
+
   if (filtered.length === 0) {
     grid.classList.add('hidden');
     emptyEl.classList.remove('hidden');
     emptyEl.classList.add('flex');
+    const emptyMsg = document.getElementById('stories-empty').querySelector('[data-i18n="empty_msg"]');
+    if (emptyMsg) emptyMsg.textContent = searchQuery.trim() ? t('no_search_results') : t('empty_msg');
     return;
   }
 
   emptyEl.classList.add('hidden');
   emptyEl.classList.remove('flex');
   grid.classList.remove('hidden');
-  grid.innerHTML = filtered.map(storyCardTemplate).join('');
+  grid.innerHTML = filtered
+    .map((story, i) => storyCardTemplate(story, { extraClass: 'card-fade-in', extraStyle: `animation-delay:${Math.min(i, 12) * 30}ms` }))
+    .join('');
+}
+
+/* ---------- Rangées façon Netflix ---------- */
+
+function buildResumeItems() {
+  const map = getProgressMap();
+  return Object.entries(map)
+    .sort((a, b) => new Date(b[1].updatedAt) - new Date(a[1].updatedAt))
+    .map(([storyId, entry]) => {
+      const story = allStories.find((s) => String(s.id) === storyId);
+      return story ? { story, progressPercent: entry.percent } : null;
+    })
+    .filter(Boolean)
+    .slice(0, ROW_MAX_ITEMS);
+}
+
+function buildTrendingItems() {
+  return [...allStories]
+    .sort((a, b) => (b.views_count || 0) - (a.views_count || 0))
+    .slice(0, ROW_MAX_ITEMS)
+    .map((story) => ({ story }));
+}
+
+function buildNewItems() {
+  // allStories est déjà trié par created_at décroissant (voir fetchStories).
+  return allStories.slice(0, ROW_MAX_ITEMS).map((story) => ({ story }));
+}
+
+function buildBecauseYouLikedItems() {
+  const topCategoryId = computeTopCategoryId();
+  if (!topCategoryId) return { items: [], category: null };
+
+  const category = allCategories.find((c) => String(c.id) === topCategoryId);
+  const items = allStories
+    .filter((s) => {
+      const cat = categoryFor(s);
+      return cat && String(cat.id) === topCategoryId;
+    })
+    .slice(0, ROW_MAX_ITEMS)
+    .map((story) => ({ story }));
+
+  return { items, category };
+}
+
+function buildHistoryItems() {
+  return getHistory()
+    .map((entry) => {
+      const story = allStories.find((s) => String(s.id) === entry.storyId);
+      return story ? { story } : null;
+    })
+    .filter(Boolean)
+    .slice(0, ROW_MAX_ITEMS);
+}
+
+function buildCategoryItems(category) {
+  return allStories
+    .filter((s) => {
+      const cat = categoryFor(s);
+      return cat && String(cat.id) === String(category.id);
+    })
+    .slice(0, ROW_MAX_ITEMS)
+    .map((story) => ({ story }));
+}
+
+function storyRowTemplate(title, items) {
+  if (!items.length) return '';
+  const cards = items
+    .map((item, i) => rowCardTemplate(item.story, { progressPercent: item.progressPercent }, i))
+    .join('');
+
+  return `
+    <section class="story-row mb-8">
+      <h2 class="font-display text-sm font-semibold text-[color:var(--text-primary)] px-5 mb-3">${title}</h2>
+      <div class="story-row-track flex gap-3 overflow-x-auto scrollbar-hide px-5 pb-1">${cards}</div>
+    </section>`;
+}
+
+function renderRowsSection() {
+  const wrap = document.getElementById('story-rows');
+  if (!wrap) return;
+
+  if (searchQuery.trim()) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+
+  const sections = [];
+
+  const resumeItems = buildResumeItems();
+  if (resumeItems.length) sections.push(storyRowTemplate(t('resume_row'), resumeItems));
+
+  const { items: recoItems, category: recoCategory } = buildBecauseYouLikedItems();
+  if (recoItems.length && recoCategory) {
+    sections.push(storyRowTemplate(`${t('because_liked_prefix')} ${localizedField(recoCategory, 'name')}`, recoItems));
+  }
+
+  const trendingItems = buildTrendingItems();
+  if (trendingItems.length) sections.push(storyRowTemplate(t('trending_row'), trendingItems));
+
+  const newItems = buildNewItems();
+  if (newItems.length) sections.push(storyRowTemplate(t('new_row'), newItems));
+
+  allCategories.forEach((category) => {
+    const items = buildCategoryItems(category);
+    if (items.length) sections.push(storyRowTemplate(localizedField(category, 'name'), items));
+  });
+
+  const historyItems = buildHistoryItems();
+  if (historyItems.length) sections.push(storyRowTemplate(t('history_row'), historyItems));
+
+  wrap.innerHTML = sections.join('');
+
+  // Les cartes sont générées dynamiquement : la délégation de clic doit
+  // être ré-attachée après chaque rendu (le conteneur, lui, ne change pas
+  // mais son contenu si).
+  wrap.querySelectorAll('.favorite-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFavorite(btn.dataset.storyId);
+    });
+  });
+  wrap.querySelectorAll('.story-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const story = allStories.find((s) => String(s.id) === card.dataset.storyId);
+      if (story) openReader(story);
+    });
+  });
+}
+
+function initSearch() {
+  const input = document.getElementById('story-search-input');
+  const clearBtn = document.getElementById('story-search-clear');
+  if (!input) return;
+
+  let debounceTimer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      searchQuery = input.value;
+      if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !searchQuery);
+        clearBtn.classList.toggle('flex', Boolean(searchQuery));
+      }
+      renderRowsSection();
+      renderStoriesGrid();
+    }, 200);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      searchQuery = '';
+      clearBtn.classList.add('hidden');
+      clearBtn.classList.remove('flex');
+      renderRowsSection();
+      renderStoriesGrid();
+      input.focus();
+    });
+  }
 }
 
 function setHomeState(state) {
@@ -438,10 +661,14 @@ function setHomeState(state) {
   const errorEl = document.getElementById('stories-error');
   const grid = document.getElementById('stories-grid');
   const emptyEl = document.getElementById('stories-empty');
+  const rowsSkeleton = document.getElementById('rows-skeleton');
+  const rows = document.getElementById('story-rows');
 
   loader.classList.toggle('hidden', state !== 'loading');
   errorEl.classList.toggle('hidden', state !== 'error');
   errorEl.classList.toggle('flex', state === 'error');
+  if (rowsSkeleton) rowsSkeleton.classList.toggle('hidden', state !== 'loading');
+  if (rows) rows.classList.toggle('hidden', state === 'loading');
 
   if (state !== 'ready') {
     grid.classList.add('hidden');
@@ -461,6 +688,23 @@ async function loadHomeData() {
   const msg = document.getElementById('stories-error-msg');
   if (msg) msg.textContent = t('error_msg');
 
+  // Hors-ligne connu à l'avance : on saute directement sur le cache local
+  // plutôt que de laisser la requête réseau échouer lentement.
+  if (!navigator.onLine) {
+    const snapshot = loadOfflineSnapshot();
+    if (snapshot) {
+      allCategories = snapshot.categories;
+      allStories = snapshot.stories;
+      favoriteStoryIds = new Set(await fetchFavorites().catch(() => []));
+      updateOfflineBanner(true);
+      renderCategoryFilters();
+      renderRowsSection();
+      renderStoriesGrid();
+      setHomeState('ready');
+      return;
+    }
+  }
+
   try {
     const [categories, stories, favorites] = await Promise.all([
       fetchCategories(),
@@ -470,11 +714,29 @@ async function loadHomeData() {
     allCategories = categories;
     allStories = stories;
     favoriteStoryIds = new Set(favorites);
+    cacheOfflineSnapshot();
+    updateOfflineBanner(false);
     renderCategoryFilters();
+    renderRowsSection();
     renderStoriesGrid();
     setHomeState('ready');
   } catch (err) {
     console.error('[MIJO Story] Erreur de chargement :', err);
+
+    // Échec réseau : on tente le contenu enregistré localement avant
+    // d'afficher un état d'erreur complet.
+    const snapshot = loadOfflineSnapshot();
+    if (snapshot) {
+      allCategories = snapshot.categories;
+      allStories = snapshot.stories;
+      updateOfflineBanner(true);
+      renderCategoryFilters();
+      renderRowsSection();
+      renderStoriesGrid();
+      setHomeState('ready');
+      return;
+    }
+
     setHomeState('error');
   }
 }
@@ -500,6 +762,8 @@ function initHome() {
     });
   }
 
+  initSearch();
+  initOfflineWatcher();
   loadHomeData();
 }
 
@@ -530,6 +794,7 @@ async function toggleFavorite(storyId) {
   if (wasFav) favoriteStoryIds.delete(id);
   else favoriteStoryIds.add(id);
   syncFavoriteButtons(id);
+  renderRowsSection(); // la rangée "Parce que tu as aimé…" peut changer
 
   if (!supabaseClient) return; // mode démo : reste local tant que Supabase n'est pas configuré
 
@@ -554,6 +819,130 @@ async function toggleFavorite(storyId) {
     else favoriteStoryIds.delete(id);
     syncFavoriteButtons(id);
   }
+}
+
+/* ---------- Historique, progression de lecture & mode hors-ligne ---------- */
+
+const HISTORY_STORAGE_KEY = 'mijo_story_history';
+const PROGRESS_STORAGE_KEY = 'mijo_story_progress';
+const OFFLINE_CACHE_KEY = 'mijo_story_offline_cache';
+const HISTORY_MAX_ENTRIES = 30;
+const ROW_MAX_ITEMS = 12;
+
+function getHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+function addToHistory(storyId) {
+  const id = String(storyId);
+  const list = getHistory().filter((entry) => entry.storyId !== id);
+  list.unshift({ storyId: id, lastReadAt: new Date().toISOString() });
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(list.slice(0, HISTORY_MAX_ENTRIES)));
+}
+
+function getProgressMap() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function getStoryProgress(storyId) {
+  const map = getProgressMap();
+  return map[String(storyId)] || null;
+}
+
+// Marque-page automatique : appelé pendant la lecture (scroll) et à la
+// fermeture du lecteur. En dessous de 4% ou au-delà de 95%, on considère
+// l'histoire "non commencée" / "terminée" et on la retire de la reprise.
+function setStoryProgress(storyId, percent) {
+  const id = String(storyId);
+  const map = getProgressMap();
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+
+  if (clamped < 4 || clamped >= 95) {
+    delete map[id];
+  } else {
+    map[id] = { percent: clamped, updatedAt: new Date().toISOString() };
+  }
+  localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(map));
+}
+
+// Catégorie la plus représentée dans les favoris + l'historique de
+// l'utilisateur, pour la rangée "Parce que tu as aimé…".
+function computeTopCategoryId() {
+  const counts = new Map();
+  const bump = (id) => {
+    if (!id) return;
+    counts.set(id, (counts.get(id) || 0) + 1);
+  };
+
+  favoriteStoryIds.forEach((storyId) => {
+    const story = allStories.find((s) => String(s.id) === storyId);
+    const category = story && categoryFor(story);
+    if (category) bump(String(category.id));
+  });
+
+  getHistory().forEach((entry) => {
+    const story = allStories.find((s) => String(s.id) === entry.storyId);
+    const category = story && categoryFor(story);
+    if (category) bump(String(category.id));
+  });
+
+  let topId = null;
+  let topCount = 0;
+  counts.forEach((count, id) => {
+    if (count > topCount) {
+      topCount = count;
+      topId = id;
+    }
+  });
+  return topId;
+}
+
+/* ---------- Mode hors-ligne (repli localStorage) ---------- */
+
+function cacheOfflineSnapshot() {
+  try {
+    localStorage.setItem(
+      OFFLINE_CACHE_KEY,
+      JSON.stringify({ categories: allCategories, stories: allStories, cachedAt: new Date().toISOString() })
+    );
+  } catch (err) {
+    console.warn('[MIJO Story] Impossible de mettre en cache pour le mode hors-ligne :', err);
+  }
+}
+
+function loadOfflineSnapshot() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || 'null');
+    if (raw && Array.isArray(raw.categories) && Array.isArray(raw.stories)) return raw;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function updateOfflineBanner(visible) {
+  const banner = document.getElementById('offline-banner');
+  if (!banner) return;
+  banner.classList.toggle('hidden', !visible);
+  banner.classList.toggle('flex', visible);
+}
+
+function initOfflineWatcher() {
+  window.addEventListener('offline', () => updateOfflineBanner(true));
+  window.addEventListener('online', () => {
+    // De retour en ligne : on tente un rechargement réel des données.
+    loadHomeData();
+  });
 }
 
 /* ---------- Lecteur immersif ---------- */
@@ -690,22 +1079,72 @@ function openReader(story) {
   updatePremiumLock(story);
   setupAmbientAudio(category);
 
+  addToHistory(story.id);
+
   const readerView = document.getElementById('reader-view');
   if (readerView) {
     readerView.classList.remove('hidden');
     readerView.scrollTop = 0;
+    // Reprend la position précédemment enregistrée, s'il y en a une.
+    const savedProgress = getStoryProgress(story.id);
+    // Force un reflow avant de lancer la transition d'entrée.
+    void readerView.offsetHeight;
+    readerView.classList.remove('opacity-0', 'translate-y-3');
+    if (savedProgress) {
+      requestAnimationFrame(() => {
+        const scrollable = readerView.scrollHeight - readerView.clientHeight;
+        readerView.scrollTop = scrollable > 0 ? (savedProgress.percent / 100) * scrollable : 0;
+      });
+    }
   }
+  updateReaderProgressBar();
   document.body.classList.add('overflow-hidden');
+}
+
+function updateReaderProgressBar() {
+  const readerView = document.getElementById('reader-view');
+  const fill = document.getElementById('reader-progress-fill');
+  if (!readerView || !fill) return 0;
+
+  const scrollable = readerView.scrollHeight - readerView.clientHeight;
+  const percent = scrollable > 0 ? Math.min(100, Math.max(0, (readerView.scrollTop / scrollable) * 100)) : 0;
+  fill.style.width = `${percent}%`;
+  return percent;
+}
+
+let progressSaveTimer = null;
+function handleReaderScroll() {
+  const percent = updateReaderProgressBar();
+  if (!currentReaderStory) return;
+  clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(() => setStoryProgress(currentReaderStory.id, percent), 400);
 }
 
 function closeReader() {
   const audio = document.getElementById('ambient-audio');
   if (audio) audio.pause();
 
+  // Marque-page automatique à la fermeture.
+  if (currentReaderStory) {
+    const readerView = document.getElementById('reader-view');
+    if (readerView) {
+      const scrollable = readerView.scrollHeight - readerView.clientHeight;
+      const percent = scrollable > 0 ? (readerView.scrollTop / scrollable) * 100 : 0;
+      setStoryProgress(currentReaderStory.id, percent);
+    }
+  }
+
   const readerView = document.getElementById('reader-view');
-  if (readerView) readerView.classList.add('hidden');
+  if (readerView) {
+    readerView.classList.add('opacity-0', 'translate-y-3');
+    setTimeout(() => readerView.classList.add('hidden'), 300);
+  }
   document.body.classList.remove('overflow-hidden');
   currentReaderStory = null;
+
+  // Les rangées "Reprendre la lecture" et "Historique" dépendent de ce
+  // qu'on vient de lire — on les rafraîchit au retour à l'accueil.
+  renderRowsSection();
 }
 
 function initReader() {
@@ -724,6 +1163,9 @@ function initReader() {
 
   const unlockBtn = document.getElementById('unlock-btn');
   if (unlockBtn) unlockBtn.addEventListener('click', openUpgradeModal);
+
+  const readerView = document.getElementById('reader-view');
+  if (readerView) readerView.addEventListener('scroll', handleReaderScroll, { passive: true });
 
   initUpgradeModal();
 }
