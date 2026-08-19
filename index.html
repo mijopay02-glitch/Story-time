@@ -4,6 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>MIJO Story — Socle</title>
+<meta name="description" content="Histoires courtes à lire, avec ambiance sonore par catégorie." />
+
+<!-- PWA : manifeste, icônes, couleur de thème -->
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#0a0f1c" />
+<link rel="icon" href="./icons/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="MIJO Story" />
 
 <!-- Polices -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -369,5 +380,17 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script>
+    // Enregistrement du service worker (app shell hors-ligne + PWA
+    // installable). Silencieux si indisponible (ex: ouverture en local
+    // via file:// pendant les tests).
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('./sw.js')
+          .catch((err) => console.warn('[MIJO Story] Enregistrement du service worker échoué :', err));
+      });
+    }
+  </script>
 </body>
 </html>
