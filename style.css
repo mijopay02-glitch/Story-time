@@ -48,6 +48,50 @@ body {
   display: none !important;
 }
 
+/* Grille d'histoires : nombre de colonnes déterminé par la largeur
+   disponible, pas par une valeur fixe. Sur mobile ça reste 2-3 colonnes,
+   sur desktop ça remplit naturellement l'espace, comme Netflix. */
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px;
+}
+@media (min-width: 640px) {
+  .story-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 18px;
+  }
+}
+@media (min-width: 1024px) {
+  .story-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 20px;
+  }
+}
+
+/* Effet de survol façon Netflix : la carte grossit légèrement et se
+   détache visuellement du reste de la grille. */
+.story-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  will-change: transform;
+}
+.story-card:hover,
+.story-card:focus-visible {
+  transform: scale(1.045);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.55);
+  border-color: rgba(212, 160, 61, 0.55);
+  z-index: 5;
+}
+
+/* Sélecteur de langue */
+.lang-option-btn {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.lang-option-btn:hover {
+  border-color: var(--accent);
+  background-color: rgba(212, 160, 61, 0.08);
+}
+
 /* Barre de filtres sans scrollbar visible */
 .scrollbar-hide {
   scrollbar-width: none;
