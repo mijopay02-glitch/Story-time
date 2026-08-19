@@ -56,22 +56,37 @@
         <span class="font-display font-semibold text-lg text-[color:var(--text-primary)]">Story</span>
       </div>
 
-      <!-- Profil anonyme -->
-      <button
-        id="edit-pseudo-btn"
-        class="flex items-center gap-2 bg-navy-elevated hover:bg-navy-line transition-colors border border-navy-line rounded-full pl-1.5 pr-3 py-1.5"
-        title="Modifier mon pseudo"
-      >
-        <span
-          class="flex items-center justify-center w-6 h-6 rounded-full bg-gold/20 text-gold-light text-xs font-display font-bold"
-        >L</span>
-        <span id="user-pseudo" class="text-sm font-medium text-[color:var(--text-primary)]"></span>
-        <input
-          id="user-pseudo-input"
-          class="hidden bg-transparent border-b border-gold text-sm font-medium w-28 text-[color:var(--text-primary)]"
-          maxlength="24"
-        />
-      </button>
+      <div class="flex items-center gap-2">
+        <!-- Paramètres / changer de langue -->
+        <button
+          id="lang-settings-btn"
+          aria-label="Changer de langue"
+          title="Langue"
+          class="flex items-center justify-center w-9 h-9 rounded-full bg-navy-elevated hover:bg-navy-line transition-colors border border-navy-line text-[color:var(--text-primary)]"
+        >
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+
+        <!-- Profil anonyme -->
+        <button
+          id="edit-pseudo-btn"
+          class="flex items-center gap-2 bg-navy-elevated hover:bg-navy-line transition-colors border border-navy-line rounded-full pl-1.5 pr-3 py-1.5"
+          title="Modifier mon pseudo"
+        >
+          <span
+            class="flex items-center justify-center w-6 h-6 rounded-full bg-gold/20 text-gold-light text-xs font-display font-bold"
+          >L</span>
+          <span id="user-pseudo" class="text-sm font-medium text-[color:var(--text-primary)]"></span>
+          <input
+            id="user-pseudo-input"
+            class="hidden bg-transparent border-b border-gold text-sm font-medium w-28 text-[color:var(--text-primary)]"
+            maxlength="24"
+          />
+        </button>
+      </div>
     </div>
   </header>
 
@@ -82,24 +97,25 @@
   ></nav>
 
   <!-- Contenu principal -->
-  <main class="flex-1 px-5 py-6 max-w-md w-full mx-auto">
+  <main class="flex-1 px-4 sm:px-6 lg:px-10 py-6 max-w-[1800px] w-full mx-auto">
     <!-- Chargement -->
     <div id="stories-loader" class="flex flex-col items-center justify-center py-24 gap-3">
       <div class="w-7 h-7 rounded-full border-2 border-navy-line border-t-gold animate-spin"></div>
-      <p class="text-xs text-[color:var(--text-muted)]">Chargement des histoires…</p>
+      <p class="text-xs text-[color:var(--text-muted)]" data-i18n="loading">Chargement des histoires…</p>
     </div>
 
     <!-- Erreur -->
     <div id="stories-error" class="hidden flex-col items-center text-center py-24 gap-2">
-      <p class="font-display font-semibold text-[color:var(--text-primary)]">
+      <p class="font-display font-semibold text-[color:var(--text-primary)]" data-i18n="error_title">
         Impossible de charger les histoires
       </p>
-      <p id="stories-error-msg" class="text-xs text-[color:var(--text-muted)] max-w-xs">
+      <p id="stories-error-msg" class="text-xs text-[color:var(--text-muted)] max-w-xs" data-i18n="error_msg">
         Vérifiez votre connexion internet et réessayez.
       </p>
       <button
         id="retry-btn"
         class="mt-3 text-xs font-display font-semibold text-navy bg-gold hover:bg-gold-light transition-colors rounded-full px-5 py-2"
+        data-i18n="retry"
       >
         Réessayer
       </button>
@@ -107,18 +123,18 @@
 
     <!-- Aucun résultat -->
     <div id="stories-empty" class="hidden flex-col items-center text-center py-24 gap-2">
-      <p class="font-display font-semibold text-[color:var(--text-primary)]">Aucune histoire ici</p>
-      <p class="text-xs text-[color:var(--text-muted)] max-w-xs">
+      <p class="font-display font-semibold text-[color:var(--text-primary)]" data-i18n="empty_title">Aucune histoire ici</p>
+      <p class="text-xs text-[color:var(--text-muted)] max-w-xs" data-i18n="empty_msg">
         Cette catégorie ne contient pas encore d'histoire.
       </p>
     </div>
 
-    <!-- Grille des histoires -->
-    <div id="stories-grid" class="hidden grid grid-cols-2 gap-3"></div>
+    <!-- Grille des histoires : colonnes responsives, pas figées à 2 -->
+    <div id="stories-grid" class="hidden story-grid"></div>
   </main>
 
   <footer class="px-5 py-4 text-center text-xs text-[color:var(--text-muted)] border-t border-navy-line">
-    MIJO Story — v0.4
+    MIJO Story — v0.5
   </footer>
 
   <!-- Vue de lecture immersive -->
@@ -166,7 +182,7 @@
       </div>
 
       <!-- Contenu -->
-      <div class="px-5 pt-6 max-w-md w-full mx-auto">
+      <div class="px-5 pt-6 max-w-2xl w-full mx-auto">
         <div id="reader-text-1" class="story-text text-[15px] leading-relaxed text-[color:var(--text-primary)]"></div>
 
         <div id="reader-part-2-wrap" class="relative mt-2">
@@ -178,14 +194,15 @@
             class="hidden absolute inset-0 flex flex-col items-center justify-end text-center pb-2 px-2 bg-gradient-to-t from-navy via-navy/95 to-transparent"
           >
             <div class="w-full max-w-xs bg-navy-soft border rounded-2xl p-5" style="border-color: var(--accent)">
-              <p class="font-display font-semibold text-[color:var(--text-primary)] mb-1">Histoire réservée aux membres</p>
-              <p class="text-xs text-[color:var(--text-muted)] mb-4">
+              <p class="font-display font-semibold text-[color:var(--text-primary)] mb-1" data-i18n="premium_lock_title">Histoire réservée aux membres</p>
+              <p class="text-xs text-[color:var(--text-muted)] mb-4" data-i18n="premium_lock_body">
                 Débloquez la suite et toutes les histoires premium de MIJO Story.
               </p>
               <button
                 id="unlock-btn"
                 class="w-full font-display font-semibold text-navy rounded-full py-2.5 text-sm transition-opacity hover:opacity-90"
                 style="background: var(--accent)"
+                data-i18n="unlock_btn"
               >
                 Débloquer l'histoire
               </button>
@@ -198,7 +215,10 @@
     <audio id="ambient-audio" loop preload="none"></audio>
   </section>
 
-  <!-- Pop-up d'upgrade Premium -->
+  <!-- Pop-up Premium : "bientôt disponible". Le paiement réel n'est pas
+       branché pour l'instant, mais toute la structure (modal, styles,
+       traductions) reste en place pour le raccorder plus tard — voir
+       initUpgradeModal() dans app.js. -->
   <div
     id="upgrade-modal"
     class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
@@ -217,66 +237,60 @@
       <p class="text-xs font-display font-semibold uppercase tracking-wide mb-1" style="color: var(--accent)">
         MIJO Story Premium
       </p>
-      <h2 class="font-display text-lg font-bold text-[color:var(--text-primary)] mb-2">
-        Débloquez toutes les histoires
+      <h2 class="font-display text-lg font-bold text-[color:var(--text-primary)] mb-2" data-i18n="premium_modal_title">
+        Bientôt disponible
       </h2>
-      <p class="text-xs text-[color:var(--text-muted)] mb-5 leading-relaxed">
-        Entrez votre email pour créer votre compte premium et lever les restrictions de lecture.
+      <p class="text-sm text-[color:var(--text-muted)] mb-5 leading-relaxed" data-i18n="premium_modal_body">
+        Le contenu premium et les paiements arrivent prochainement. Revenez bientôt !
       </p>
-
-      <label class="block text-xs font-medium text-[color:var(--text-muted)] mb-1.5" for="upgrade-email-input">
-        Adresse email
-      </label>
-      <input
-        id="upgrade-email-input"
-        type="email"
-        inputmode="email"
-        placeholder="vous@exemple.com"
-        class="w-full bg-navy border border-navy-line rounded-xl px-3.5 py-2.5 text-sm text-[color:var(--text-primary)] mb-1.5"
-      />
-      <p id="upgrade-error" class="hidden text-xs text-rose-400 mb-2"></p>
 
       <button
-        id="google-pay-btn"
-        class="w-full flex items-center justify-center gap-2 bg-white text-navy font-display font-semibold rounded-full py-2.5 text-sm mt-3 transition-opacity hover:opacity-90 disabled:opacity-60"
+        id="upgrade-ok-btn"
+        class="w-full font-display font-semibold text-navy rounded-full py-2.5 text-sm transition-opacity hover:opacity-90"
+        style="background: var(--accent)"
+        data-i18n="premium_modal_ok"
       >
-        <svg viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor">
-          <path d="M12.2 10.4v3.4h4.76c-.2 1.2-1.5 3.5-4.76 3.5-2.86 0-5.2-2.37-5.2-5.3s2.34-5.3 5.2-5.3c1.63 0 2.72.7 3.35 1.3l2.28-2.2C16.35 4.2 14.46 3.3 12.2 3.3c-4.64 0-8.44 3.8-8.44 8.7s3.8 8.7 8.44 8.7c4.87 0 8.1-3.42 8.1-8.24 0-.55-.06-.97-.14-1.4H12.2z" />
-        </svg>
-        <span id="google-pay-label">Payer avec Google Pay</span>
+        Compris
       </button>
-
-      <p class="text-[10px] text-[color:var(--text-muted)] text-center mt-3 leading-relaxed">
-        Simulation de paiement — aucune transaction réelle n'est effectuée en mode test.
-      </p>
     </div>
   </div>
 
-  <!-- Publicité interstitielle simulée (déclenchée par le bouton Retour) -->
-  <div id="ad-interstitial" class="hidden fixed inset-0 z-[60] bg-black flex-col">
-    <div class="flex-1 flex items-center justify-center p-8 text-center">
-      <div>
-        <p class="text-[11px] uppercase tracking-widest text-gold-light font-display font-semibold mb-3">
-          Publicité
-        </p>
-        <h2 class="font-display text-xl font-bold text-white mb-2">Découvrez MIJO Business Helper</h2>
-        <p class="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">
-          Emplacement réservé à une publicité interstitielle (AdMob) en production.
-        </p>
-      </div>
-    </div>
-    <div class="flex items-center justify-between px-5 py-4">
-      <span id="ad-countdown" class="text-xs text-gray-400 font-mono"></span>
+  <!-- Écran de sélection de langue (premier lancement, et bouton
+       paramètres du header pour la changer ensuite). -->
+  <div
+    id="lang-modal"
+    class="hidden fixed inset-0 z-[70] bg-navy/97 backdrop-blur-sm flex items-center justify-center px-6"
+  >
+    <div class="w-full max-w-sm text-center relative">
       <button
-        id="ad-close-btn"
-        disabled
-        aria-label="Fermer la publicité"
-        class="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center disabled:opacity-40 transition-opacity"
+        id="lang-close-btn"
+        aria-label="Fermer"
+        class="hidden absolute -top-2 right-0 w-8 h-8 rounded-full items-center justify-center text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)] transition-colors"
       >
         <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
+
+      <p class="font-display font-extrabold tracking-tight text-2xl text-gold-light mb-1">MIJO Story</p>
+      <p class="text-sm text-[color:var(--text-muted)] mb-8" data-i18n="lang_select_prompt">
+        Choisissez votre langue
+      </p>
+
+      <div class="grid grid-cols-1 gap-3">
+        <button
+          data-lang="fr"
+          class="lang-option-btn flex items-center justify-center gap-2 bg-navy-elevated border border-navy-line rounded-xl py-3 text-sm font-display font-semibold text-[color:var(--text-primary)]"
+        >Français</button>
+        <button
+          data-lang="en"
+          class="lang-option-btn flex items-center justify-center gap-2 bg-navy-elevated border border-navy-line rounded-xl py-3 text-sm font-display font-semibold text-[color:var(--text-primary)]"
+        >English</button>
+        <button
+          data-lang="es"
+          class="lang-option-btn flex items-center justify-center gap-2 bg-navy-elevated border border-navy-line rounded-xl py-3 text-sm font-display font-semibold text-[color:var(--text-primary)]"
+        >Español</button>
+      </div>
     </div>
   </div>
 
